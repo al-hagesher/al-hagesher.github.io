@@ -24,6 +24,7 @@
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; }
+html { overflow-x: clip; }
 body {
   font-family: var(--sans); color: var(--ink); background: var(--cream);
   font-size: 15.5px; line-height: 1.5; -webkit-font-smoothing: antialiased;
@@ -344,9 +345,9 @@ dialog::backdrop { background: rgba(47, 29, 17, .38); backdrop-filter: blur(2px)
 @media (max-width: 860px) {
   body { font-size: 15px; }
   .sidebar {
-    position: fixed; inset-inline-start: 0; top: 0; z-index: 90; transform: translateX(105%); transition: transform .25s; box-shadow: var(--shadow);
+    position: fixed; inset-inline-start: 0; top: 0; z-index: 90; transform: translateX(105%); visibility: hidden; transition: transform .25s, visibility .25s; box-shadow: var(--shadow);
   }
-  .sidebar.open { transform: none; }
+  .sidebar.open { transform: none; visibility: visible; }
   .topbar { padding: 10px 16px; }
   .topbar h1 { font-size: 1.35rem; }
   .topbar { flex-wrap: wrap; row-gap: 8px; }

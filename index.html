@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>על הגשר · ניהול</title>
+  <meta name="theme-color" content="#4a2a16">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="על הגשר">
+  <link rel="icon" href="assets/icon.png">
+  <link rel="apple-touch-icon" href="assets/icon.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@400;500;700&family=Assistant:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar" id="sidebar">
+      <a class="brand" href="#/" aria-label="על הגשר — בית"><img src="assets/logo.png" alt="על הגשר — מאפים, מתוקים ומעבר"></a>
+      <nav class="nav" id="nav"></nav>
+      <div class="side-foot"><a href="#/settings" data-sync-status class="sync-pill off"></a></div>
+    </aside>
+    <div class="scrim"></div>
+    <div class="main-wrap">
+      <header class="topbar">
+        <img class="mini-logo" src="assets/icon.png" alt="">
+        <h1 id="pageTitle">על הגשר</h1>
+        <a href="#/settings" data-sync-status class="sync-pill off sync-top" aria-label="מצב סנכרון"></a>
+        <div id="topActions"></div>
+      </header>
+      <main id="main"></main>
+    </div>
+    <nav class="tabbar" id="tabbar"></nav>
+  </div>
+  <div id="toast" role="status"></div>
+  <dialog id="modal"></dialog>
+
+  <script src="js/core.js"></script>
+  <script src="js/seed.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/sync.js"></script>
+  <script src="js/form.js"></script>
+  <script src="js/pages/dashboard.js"></script>
+  <script src="js/pages/recipes.js"></script>
+  <script src="js/pages/pantry.js"></script>
+  <script src="js/pages/orders.js"></script>
+  <script src="js/pages/production.js"></script>
+  <script src="js/pages/customers.js"></script>
+  <script src="js/pages/expenses.js"></script>
+  <script src="js/pages/stats.js"></script>
+  <script src="js/pages/wheel.js"></script>
+  <script src="js/pages/tools.js"></script>
+  <script src="js/pages/settings.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

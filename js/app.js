@@ -35,7 +35,7 @@
   };
   // רענון הדף הנוכחי בלי לאבד גלילה
   A.refresh = () => { const y = root.scrollY; A.render(); root.scrollTo(0, y); };
-  A.commit = (msg) => { A.save(); A.refresh(); if (msg) A.toast(msg); };
+  A.commit = (msg) => { A.save(); A.refresh(); if (msg) { A.toast(msg); A.haptic && A.haptic(); } };
 
   const closeMenu = () => { document.getElementById('sidebar').classList.remove('open'); document.querySelector('.scrim').classList.remove('show'); };
 

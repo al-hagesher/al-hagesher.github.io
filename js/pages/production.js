@@ -7,6 +7,33 @@
     : ['kg', 'g'].includes(ing.pkgUnit) ? A.fmtGrams(A.toGrams(n, ing.pkgUnit, ing))
       : (A.toGrams(n, ing.pkgUnit, ing) >= 1000 * ing.gramsPerCup / 240 ? U.fmt(U.round(A.convert(n, ing.pkgUnit, 'l', ing), 2)) + ' ליטר' : U.fmt(Math.round(A.convert(n, ing.pkgUnit, 'ml', ing))) + ' מ״ל');
 
+  // תזמון לאחור: מתי להתחיל כל מתכון כדי שיהיה מוכן (כולל צינון ואריזה) לפני מועד המסירה הראשון
+  const BUFFER = 30;
+  const toDate = (d, t) => { const x = U.parse(d); const [h, m] = (t || '10:00').split(':').map(Number); x.setHours(h, m, 0, 0); return x; };
+  const fmtDT = dt => `${U.relDay(U.iso(dt))} ${U.pad(dt.getHours())}:${U.pad(dt.getMinutes())}`;
+  A.bakeSchedule = (orders) => {
+    const groups = {};
+    orders.forEach(o => o.items.forEach(i => {
+      const r = i.recipeId && C.recipe(i.recipeId); if (!r) return;
+      const k = o.date + '|' + r.id, due = toDate(o.date, o.time);
+      const g = groups[k] = groups[k] || { recipe: r, units: 0, due };
+      g.units += +i.qty || 0; if (due < g.due) g.due = due;
+    }));
+    const tasks = [];
+    Object.values(groups).forEach(g => {
+      const t = C.times(g.recipe), batches = Math.ceil(g.units / (+g.recipe.yield || 1) - 1e-9);
+      const total = t.total + (batches - 1) * (t.prep + t.bake);
+      const ready = new Date(g.due.getTime() - BUFFER * 60000), start = new Date(ready.getTime() - total * 60000);
+      tasks.push({ recipe: g.recipe, units: g.units, batches, start, ready, due: g.due, total, active: t.active * batches });
+      (g.recipe.ingredients || []).filter(l => l.subId).forEach(l => {
+        const s = C.recipe(l.subId); if (!s) return;
+        const st = C.times(s), dur = st.total;
+        tasks.push({ recipe: s, sub: g.recipe, batches: Math.ceil((+l.qty || 1) * batches - 1e-9), start: new Date(start.getTime() - dur * 60000), ready: start, due: g.due, total: dur, active: st.active });
+      });
+    });
+    return tasks.sort((a, b) => a.start - b.start);
+  };
+
   P.production = {
     title: 'תכנון ייצור',
     render(main) {
@@ -48,6 +75,10 @@
           <div class="row no-print" style="margin-top:12px"><button class="btn sm soft" data-act="deduct">${A.icon('box')}הורדת הכמויות מהמלאי</button></div>
         </div>
       </div>
+      ${(() => { const tasks = A.bakeSchedule(pr.orders), now = new Date(); return tasks.length ? `<div class="card section"><div class="card-h"><h3>${A.icon('timer')}לוח זמנים לאפייה</h3><span class="small muted">מחושב אחורה ממועד המסירה, כולל התפחה, צינון ו־${BUFFER} דק׳ לאריזה</span></div>
+        ${tasks.map(t => `<div class="list-item"><div class="date-box" style="width:64px"><b style="font-size:1.05rem">${U.pad(t.start.getHours())}:${U.pad(t.start.getMinutes())}</b><span>${U.relDay(U.iso(t.start))}</span></div>
+          <div class="main"><div class="t">${t.sub ? 'הכנת רכיב: ' : ''}${U.esc(t.recipe.name)} ${t.batches > 1 ? `<span class="badge">×${t.batches}</span>` : ''} ${t.start < now ? '<span class="badge bad">היה צריך להתחיל</span>' : ''}</div>
+          <div class="s">${t.sub ? 'עבור ' + U.esc(t.sub.name) + ' · ' : ''}מוכן עד ${fmtDT(t.ready)} · משך ${U.minutes(t.total)} (עבודה ${U.minutes(t.active)})${t.sub ? '' : ' · מסירה ' + fmtDT(t.due)}</div></div></div>`).join('')}</div>` : ''; })()}
       <div class="card"><div class="card-h"><h3>${A.icon('calendar')}לו״ז מסירות</h3></div>
         ${Object.keys(byDay).map(d => `<div class="small muted" style="padding:8px 4px 0;font-weight:700">${U.relDay(d)} · ${U.dayName(d)} ${U.fmtDate(d)}</div>${byDay[d].map(A.orderRow).join('')}`).join('')}</div>`
         : `<div class="card empty"><h3>אין הזמנות פתוחות בטווח הזה</h3><p>בחרי טווח תאריכים אחר.</p></div>`}`;

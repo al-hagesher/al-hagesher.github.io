@@ -105,7 +105,7 @@
           if (e.target.closest('[data-del]')) {
             if (used.length) return A.toast('המצרך משמש במתכונים — הסירי אותו מהם קודם');
             A.closeModal();
-            if (await A.confirm(`למחוק את "${U.esc(i.name)}"?`, 'מחיקה')) { A.state.ingredients = A.state.ingredients.filter(x => x !== i); A.commit('נמחק'); }
+            if (await A.confirm(`למחוק את "${U.esc(i.name)}"?`, 'מחיקה')) { const idx = A.state.ingredients.indexOf(i); A.state.ingredients = A.state.ingredients.filter(x => x !== i); A.commit(); A.undoToast(`"${i.name}" נמחק`, () => { A.state.ingredients.splice(idx, 0, i); A.commit(); }); }
           }
         });
       }

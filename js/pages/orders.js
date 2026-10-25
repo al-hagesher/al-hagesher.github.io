@@ -134,7 +134,7 @@
           else if ('edit' in b.dataset) A.editOrder(o);
           else if ('dup' in b.dataset) { const c = U.clone(o); Object.assign(c, { id: U.uid(), num: s.nextOrderNum++, status: 'new', paid: 0, demo: false, date: U.addDays(U.today(), 1), createdAt: U.today() }); A.state.orders.push(c); A.save(); A.editOrder(c); }
           else if ('print' in b.dataset) printSlip(o);
-          else if ('del' in b.dataset) { A.closeModal(); if (await A.confirm(`למחוק את הזמנה #${o.num}? אם היא בוטלה, עדיף לסמן "בוטלה" כדי שתישאר בסטטיסטיקה.`, 'מחיקה')) { A.state.orders = A.state.orders.filter(x => x !== o); A.commit('ההזמנה נמחקה'); } }
+          else if ('del' in b.dataset) { A.closeModal(); if (await A.confirm(`למחוק את הזמנה #${o.num}? אם היא בוטלה, עדיף לסמן "בוטלה" כדי שתישאר בסטטיסטיקה.`, 'מחיקה')) { const idx = A.state.orders.indexOf(o); A.state.orders = A.state.orders.filter(x => x !== o); A.commit(); A.undoToast(`הזמנה #${o.num} נמחקה`, () => { A.state.orders.splice(idx, 0, o); A.commit(); }); } }
         });
       }
     });

@@ -33,6 +33,9 @@
           <div class="row"><button class="btn" data-act="backup">${A.icon('download')}הורדת גיבוי</button>
           <label class="btn ghost">${A.icon('upload')}שחזור מגיבוי<input type="file" accept=".json,application/json" data-restore hidden></label>
           <button class="btn ghost" data-act="csv">${A.icon('download')}ייצוא הזמנות לאקסל</button></div></div>
+        <div class="card"><div class="card-h"><h3>${A.icon('sun')}תצוגה</h3></div>
+          <div class="seg" style="display:flex">${[['auto', 'אוטומטי'], ['light', 'בהיר'], ['dark', 'כהה']].map(([v, l]) => `<button data-theme-set="${v}" class="${(document.documentElement.dataset.theme || 'auto') === v ? 'on' : ''}">${l}</button>`).join('')}</div>
+          <p class="small muted" style="margin-bottom:0">"אוטומטי" עובר לכהה לפי הגדרות הטלפון או המחשב. ההגדרה נשמרת לכל מכשיר בנפרד.</p></div>
         <div class="card"><div class="card-h"><h3>גלגל החיים</h3></div>
           <p class="small muted" style="margin-top:0">אפשר לשנות את שמות התחומים (שינוי שם לא מוחק היסטוריה).</p>
           <div class="form-grid" data-form="wheel">${A.state.wheel.areas.map((a, i) => `<input data-area="${i}" value="${U.esc(a)}" aria-label="תחום ${i + 1}">`).join('')}</div></div>
@@ -56,6 +59,8 @@
         s[f.name] = v; A.save(); A.toast('נשמר');
       };
       main.onclick = async e => {
+        const th = e.target.closest('[data-theme-set]');
+        if (th) { const v = th.dataset.themeSet; if (v === 'auto') delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = v; try { localStorage.setItem('al-hagesher-theme', v); } catch (err) { } A.refresh(); return; }
         const b = e.target.closest('[data-act]'); if (!b) return;
         const act = b.dataset.act;
         if (act.startsWith('sync')) return syncAction(act, b);

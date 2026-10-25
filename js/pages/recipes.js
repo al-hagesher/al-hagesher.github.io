@@ -11,10 +11,11 @@
     title: 'מתכונים',
     render(main) {
       A.setActions(`<button class="btn" data-act="new">${A.icon('plus')}מתכון חדש</button>`);
-      const cats = ['הכל', '★ מועדפים', ...A.RECIPE_CATS.filter(c => A.state.recipes.some(r => r.category === c))];
+      const cats = ['הכל', '★ מועדפים', '📖 מתכוני בסיס', ...A.RECIPE_CATS.filter(c => A.state.recipes.some(r => r.category === c))];
       let list = A.state.recipes.filter(r => {
         if (view.cat === '★ מועדפים' && !r.favorite) return false;
-        if (view.cat !== 'הכל' && view.cat !== '★ מועדפים' && r.category !== view.cat) return false;
+        if (view.cat === '📖 מתכוני בסיס' && !r.library) return false;
+        if (!['הכל', '★ מועדפים', '📖 מתכוני בסיס'].includes(view.cat) && r.category !== view.cat) return false;
         if (view.q && !(r.name + ' ' + (r.tags || []).join(' ') + ' ' + (r.description || '')).includes(view.q)) return false;
         return true;
       }).map(r => ({ r, p: C.pricing(r) }));
@@ -39,7 +40,7 @@
               <div class="meta"><span>${A.icon('clock')}${U.minutes(p.times.total)}</span><span>${U.fmt(r.yield)} ${U.esc(r.yieldUnit || 'יח׳')}</span><span>${U.esc(r.category || '')}</span></div>
               <div class="row between" style="margin-top:auto;padding-top:6px">
                 <span class="small">עלות ${U.money(p.perUnit)} · מחיר <b>${p.price ? U.money(p.price) : '—'}</b></span>
-                <span class="badge ${p.status === 'none' ? '' : p.status}">${p.price ? U.pct(p.margin) : STATUS_TXT.none}</span>
+                <span class="badge ${p.status === 'none' ? '' : p.status}">${p.price ? U.pct(p.margin) : isComponent(r) ? 'רכיב' : STATUS_TXT.none}</span>
               </div>
             </div>
           </div>`).join('')}</div>` : `<div class="card empty"><h3>${A.state.recipes.length ? 'לא נמצאו מתכונים' : 'עוד אין מתכונים'}</h3><p>${A.state.recipes.length ? 'נסי חיפוש אחר' : 'הוסיפי את המתכון הראשון, או טעני נתוני דוגמה מדף הבית.'}</p><button class="btn" data-act="new">${A.icon('plus')}מתכון חדש</button></div>`}`;
@@ -60,10 +61,13 @@
     A.refresh();
     const i = main.querySelector('[data-f="q"]'); if (i) { i.focus(); try { i.setSelectionRange(pos, pos); } catch (e) { } }
   }
+  const isComponent = r => r.category === 'בסיסים וקרמים' || (!r.price && C.usedAsSub(r.id).length > 0);
+  A.isComponent = isComponent;
   const sold = id => U.sum(C.activeOrders(), o => U.sum(o.items.filter(i => i.recipeId === id), i => i.qty));
 
   /* ---------- תצוגת שורה לפי מצב ---------- */
   function displayLine(l, factor, mode) {
+    if (l.subId) return { q: (+l.qty || 0) * factor, unit: 'batch', approx: '', ing: null, sub: C.recipe(l.subId) };
     const ing = C.ing(l.ingId), qty = (+l.qty || 0) * factor;
     let q = qty, unit = l.unit, approx = '';
     if (ing && mode === 'grams' && !(l.unit === 'unit' && !ing.gramsPerUnit)) {
@@ -81,7 +85,7 @@
     }
     return { q, unit, approx, ing };
   }
-  const unitLabel = (unit, q) => unit === 'unit' ? (q === 1 ? 'יחידה' : 'יח׳') : unit === 'cup' && q > 1 ? 'כוסות' : unit === 'tbsp' && q > 1 ? 'כפות' : unit === 'tsp' && q > 1 ? 'כפיות' : A.UNITS[unit];
+  const unitLabel = (unit, q) => unit === 'batch' ? (q === 1 ? 'מנה' : 'מנות') : unit === 'unit' ? (q === 1 ? 'יחידה' : 'יח׳') : unit === 'cup' && q > 1 ? 'כוסות' : unit === 'tbsp' && q > 1 ? 'כפות' : unit === 'tsp' && q > 1 ? 'כפיות' : A.UNITS[unit];
 
   /* ---------- צפייה במתכון ---------- */
   P.recipe = {
@@ -92,21 +96,21 @@
       if (view.id !== id) { view.id = id; view.factor = 1; view.mode = 'orig'; view.bakers = false; }
       const f = view.factor, p = C.pricing(r), t = p.times, s = A.state.settings;
       const allergens = C.allergens(r);
-      A.setActions(`<button class="btn ghost hide-m" data-act="print">${A.icon('print')}הדפסה</button><button class="btn soft" data-act="cook">${A.icon('play')}מצב אפייה</button><button class="btn" data-act="edit">${A.icon('edit')}עריכה</button>`);
+      A.setActions(`<button class="btn ghost hide-m" data-act="label">${A.icon('box')}תווית</button><button class="btn ghost hide-m" data-act="print">${A.icon('print')}הדפסה</button><button class="btn soft" data-act="cook">${A.icon('play')}מצב אפייה</button><button class="btn" data-act="edit">${A.icon('edit')}עריכה</button>`);
 
       // אחוזי אופה: ביחס לסך הקמח בגרמים
       const flourG = U.sum(r.ingredients, l => { const i = C.ing(l.ingId); return i && i.category === 'קמחים' ? A.toGrams(l.qty, l.unit, i) : 0; });
       const sections = U.groupBy(r.ingredients.map((l, idx) => Object.assign({ idx }, l)), l => l.section || '');
       const ingRows = Object.keys(sections).map(sec => (sec ? `<tr class="ing-section"><td colspan="4">${U.esc(sec)}</td></tr>` : '') + sections[sec].map(l => {
         const d = displayLine(l, f, view.mode), c = C.lineCost(l, f);
-        const name = d.ing ? d.ing.name : (l.name || 'מצרך לא מקושר');
+        const name = d.sub ? `<a href="#/recipe/${d.sub.id}">מתכון: ${U.esc(d.sub.name)}</a>` : U.esc(d.ing ? d.ing.name : (l.name || 'מצרך לא מקושר'));
         const bp = view.bakers && flourG && d.ing ? A.toGrams(l.qty, l.unit, d.ing) / flourG : null;
-        return `<tr><td class="q">${A.fmtQty(d.q, d.unit)} ${unitLabel(d.unit, d.q)}</td><td>${U.esc(name)}${d.approx ? ` <span class="muted small">(${d.approx})</span>` : ''}${c.missing ? ` <span class="badge warn" title="${U.esc(c.reason)}">${U.esc(c.reason)}</span>` : ''}</td>
+        return `<tr><td class="q">${A.fmtQty(d.q, d.unit)} ${unitLabel(d.unit, d.q)}</td><td>${name}${d.approx ? ` <span class="muted small">(${d.approx})</span>` : ''}${c.missing ? ` <span class="badge warn" title="${U.esc(c.reason)}">${U.esc(c.reason)}</span>` : ''}</td>
           <td class="n small muted">${bp != null ? U.fmt(U.round(bp * 100, 1)) + '%' : ''}</td><td class="n small">${c.cost ? U.money(c.cost) : ''}</td></tr>`;
       }).join('')).join('');
 
       const seg = (name, items, cur) => `<div class="seg">${items.map(([v, l]) => `<button data-${name}="${v}" class="${String(cur) === String(v) ? 'on' : ''}">${l}</button>`).join('')}</div>`;
-      const tb = [['prep', 'הכנה', 'var(--brown)'], ['decor', 'עיצוב ואריזה', 'var(--brown-3)'], ['rest', 'התפחה/מנוחה', 'var(--sand)'], ['bake', 'אפייה', 'var(--caramel)'], ['cool', 'צינון', '#ddd2c4']];
+      const tb = [['prep', 'הכנה', 'var(--brown)'], ['decor', 'עיצוב ואריזה', 'var(--brown-3)'], ['rest', 'התפחה/מנוחה', 'var(--sand)'], ['bake', 'אפייה', 'var(--caramel)'], ['cool', 'צינון', 'var(--cool)']];
       const verdictTxt = {
         ok: `המחיר מכסה את כל העלויות, משלם לך ${U.money(s.hourlyRate)} לשעה ומשאיר רווח של ${U.pct(p.margin)}.`,
         warn: `המחיר מכסה עלויות ושכר, אבל הרווח (${U.pct(p.margin)}) מתחת ליעד שלך (${U.pct(p.targetMargin)}). מומלץ ${U.money(p.suggested)}.`,
@@ -125,7 +129,7 @@
           <div class="grid g4" style="gap:10px">
             <div><div class="muted small">יוצא</div><b>${U.fmt(U.round(r.yield * f, 2))} ${U.esc(r.yieldUnit || 'יח׳')}</b></div>
             <div><div class="muted small">זמן כולל</div><b>${U.minutes(t.total)}</b></div>
-            <div><div class="muted small">עבודה בפועל</div><b>${U.minutes(t.active)}</b></div>
+            <div><div class="muted small">עבודה בפועל</div><b>${U.minutes(p.activeAll)}</b>${p.activeAll > t.active ? '<div class="small muted">כולל רכיבים</div>' : ''}</div>
             <div><div class="muted small">תנור</div><b>${r.ovenTemp ? r.ovenTemp + '°' : '—'}${t.bake ? ' · ' + U.minutes(t.bake) : ''}</b></div>
           </div>
           ${allergens.length ? `<div class="row small"><span class="muted">אלרגנים:</span>${allergens.map(a => `<span class="badge warn">${a}</span>`).join('')}</div>` : ''}
@@ -166,12 +170,13 @@
             ${(t.bake || t.rest) ? `<div class="row no-print" style="margin-top:12px">${t.rest ? `<button class="btn sm ghost" data-timer="${t.rest}" data-label="התפחה – ${U.esc(r.name)}">${A.icon('timer')}טיימר התפחה</button>` : ''}${t.bake ? `<button class="btn sm ghost" data-timer="${t.bake}" data-label="אפייה – ${U.esc(r.name)}">${A.icon('timer')}טיימר אפייה</button>` : ''}</div>` : ''}
           </div>
 
+          ${storageCard(r)}
           <div class="card">
             <div class="card-h"><h3>${A.icon('wallet')}עלות ותמחור</h3><span class="muted small">ל־${U.fmt(r.yield)} ${U.esc(r.yieldUnit || 'יח׳')}</span></div>
             <div class="cost-row"><span>חומרי גלם</span><span class="money">${U.money(p.ingredients)}</span></div>
             <div class="cost-row"><span>אריזה</span><span class="money">${U.money(p.packaging)}</span></div>
             <div class="cost-row"><span>תנור, גז ושונות</span><span class="money">${U.money(p.overhead)}</span></div>
-            <div class="cost-row"><span>שכר עבודה (${U.minutes(t.active)} × ${U.money(s.hourlyRate)}/ש׳)</span><span class="money">${U.money(p.labor)}</span></div>
+            <div class="cost-row"><span>שכר עבודה (${U.minutes(p.activeAll)}${p.activeAll > t.active ? ' כולל רכיבים' : ''} × ${U.money(s.hourlyRate)}/ש׳)</span><span class="money">${U.money(p.labor)}</span></div>
             <div class="cost-row total"><span>עלות מלאה למתכון</span><span class="money">${U.money(p.total)}</span></div>
             <div class="cost-row total" style="border-top:0;padding-top:4px;margin-top:0"><span>עלות ליחידה</span><span class="money">${U.money(p.perUnit)}</span></div>
             ${p.missing.length ? `<div class="notice" style="margin-top:10px">${A.icon('alert')}<div>חסרים נתונים לחישוב מדויק: ${p.missing.map(U.esc).join(', ')}. <a href="#/pantry">לעדכון במחסן</a></div></div>` : ''}
@@ -183,7 +188,8 @@
             </div>
             <label class="field no-print" style="margin-top:14px"><span>מחיר מכירה ליחידה (₪) — שינוי כאן נשמר מיד</span>
               <div class="row" style="flex-wrap:nowrap"><input type="number" min="0" step="1" value="${r.price || ''}" data-f="price"><button class="btn sm soft" data-act="useSuggested">להשתמש במומלץ</button></div></label>
-            <div class="verdict ${p.status}" style="margin-top:14px">
+            ${isComponent(r) && !p.price ? `<div class="notice info" style="margin-top:14px">${A.icon('book')}<div>זה מתכון רכיב (בסיס/קרם). העלות שלו נכנסת אוטומטית למתכונים שמשתמשים בו${C.usedAsSub(r.id).length ? ': ' + C.usedAsSub(r.id).map(x => `<a href="#/recipe/${x.id}">${U.esc(x.name)}</a>`).join(', ') : ''}.</div></div>` : ''}
+            <div class="verdict ${p.status}" style="margin-top:14px;${isComponent(r) && !p.price ? 'display:none' : ''}">
               <div class="big">${p.price ? U.pct(p.margin) : '?'}</div>
               <div><b>${STATUS_TXT[p.status]}</b><div class="small">${verdictTxt[p.status]}</div></div>
             </div>
@@ -229,6 +235,7 @@
         if (b.dataset.act === 'edit') editRecipe(r);
         if (b.dataset.act === 'cook') cookMode(r);
         if (b.dataset.act === 'print') root.print();
+        if (b.dataset.act === 'label') printLabel(r);
       };
     }
   };
@@ -246,13 +253,57 @@
     A.state.recipes.push(c); A.save(); A.go('recipe/' + c.id); A.toast('המתכון שוכפל');
   }
   async function remove(r) {
+    const parents = C.usedAsSub(r.id);
+    if (parents.length) return A.toast('המתכון משמש כרכיב ב: ' + parents.map(x => x.name).join(', ') + ' — הסירי אותו משם קודם');
     const used = A.state.orders.some(o => o.items.some(i => i.recipeId === r.id));
     if (!await A.confirm(`למחוק את "${U.esc(r.name)}"?${used ? '<br><span class="muted small">המתכון מופיע בהזמנות — הן יישמרו עם שם המוצר.</span>' : ''}`, 'מחיקה')) return;
+    const before = { orders: U.clone(A.state.orders.map(o => ({ id: o.id, items: o.items }))), idx: A.state.recipes.indexOf(r), product: A.state.form.products[r.id] };
     A.state.orders.forEach(o => o.items.forEach(i => { if (i.recipeId === r.id) { const rc = C.recipeCost(r); i.unitCost = rc.directPerUnit; i.recipeId = null; } }));
     A.state.recipes = A.state.recipes.filter(x => x.id !== r.id);
+    if (r.library) { A.state.deletedLibrary = A.state.deletedLibrary || []; if (!A.state.deletedLibrary.includes(r.id)) A.state.deletedLibrary.push(r.id); }
     if (A.state.form && A.state.form.products) delete A.state.form.products[r.id];
-    A.save(); A.go('recipes'); A.toast('נמחק');
+    A.save(); A.go('recipes');
+    A.undoToast(`"${r.name}" נמחק`, () => {
+      A.state.recipes.splice(Math.min(before.idx, A.state.recipes.length), 0, r);
+      before.orders.forEach(b => { const o = A.state.orders.find(x => x.id === b.id); if (o) o.items = b.items; });
+      if (before.product) A.state.form.products[r.id] = before.product;
+      if (A.state.deletedLibrary) A.state.deletedLibrary = A.state.deletedLibrary.filter(x => x !== r.id);
+      A.commit(); A.go('recipe/' + r.id);
+    });
   }
+
+  /* ---------- אחסון, חיי מדף ותווית ---------- */
+  function storageCard(r) {
+    const s = r.storage || {};
+    if (!s.room && !s.fridge && !s.freezer && !s.note) return '';
+    const cell = (v, l) => `<div><div class="muted small">${l}</div><b>${v ? v + (v === 1 ? ' יום' : ' ימים') : '—'}</b></div>`;
+    return `<div class="card"><div class="card-h"><h3>${A.icon('clock')}אחסון וחיי מדף</h3><button class="btn sm ghost no-print" data-act2="label">${A.icon('box')}תווית מוצר</button></div>
+      <div class="grid g3" style="gap:10px">${cell(s.room, 'טמפרטורת החדר')}${cell(s.fridge, 'מקרר')}${cell(s.freezer, 'מקפיא')}</div>
+      ${s.note ? `<p class="small" style="margin:10px 0 0">${U.esc(s.note)}</p>` : ''}</div>`;
+  }
+  document.addEventListener('click', e => { const b = e.target.closest('[data-act2="label"]'); if (b) { const r = C.recipe(A.route().args[0]); if (r) printLabel(r); } });
+  function printLabel(r) {
+    const flat = Object.values(C.flatten(r, 1 / (+r.yield || 1)));
+    flat.forEach(f => f.w = f.grams + (f.gramsEq || 0));
+    flat.sort((a, b) => b.w - a.w);
+    const total = flat.reduce((s, f) => s + f.w, 0);
+    const al = C.allergens(r), s = r.storage || {}, st = A.state.settings;
+    const days = s.room || s.fridge || 0, where = s.room ? 'בטמפרטורת החדר' : s.fridge ? 'בקירור' : '';
+    const w = root.open('', '_blank'); if (!w) return A.toast('הדפדפן חסם חלון — אפשרי חלונות קופצים');
+    w.document.write(`<html dir="rtl" lang="he"><head><meta charset="utf-8"><title>תווית — ${U.esc(r.name)}</title>
+      <style>body{font-family:Assistant,Arial;margin:0;padding:16px;color:#2f1d11}.l{width:90mm;border:1px solid #4a2a16;border-radius:6px;padding:10px 12px}h1{font-family:'Frank Ruhl Libre',serif;font-size:20px;margin:4px 0;color:#4a2a16}p{margin:4px 0;font-size:11.5px;line-height:1.45}.al{font-weight:700}.row{display:flex;justify-content:space-between;font-size:11.5px;margin-top:6px}@media print{body{padding:0}}</style></head><body>
+      <div class="l"><div style="text-align:center"><img src="${new URL('assets/logo.png', location.href)}" style="width:90px"></div>
+      <h1>${U.esc(r.name)}</h1>
+      <p><b>רכיבים:</b> ${flat.map(f => (f.ing.allergens || []).length ? `<b>${U.esc(f.ing.name)}</b>` : U.esc(f.ing.name)).join(', ')}.</p>
+      ${al.length ? `<p class="al">מכיל: ${al.join(', ')}.</p>` : ''}
+      <p class="small">מיוצר במטבח ביתי שבו נעשה שימוש גם ב: גלוטן, חלב, ביצים, אגוזים ושומשום.</p>
+      <div class="row"><span>תאריך ייצור: ${U.fmtDate(U.today())}</span>${days ? `<span>לשימוש עד: ${U.fmtDate(U.addDays(U.today(), days))} (${where})</span>` : ''}</div>
+      ${s.note ? `<p>אחסון: ${U.esc(s.note)}</p>` : ''}
+      <div class="row"><span>${U.esc(st.businessName || 'על הגשר')}${st.phone ? ' · ' + U.esc(st.phone) : ''}</span><span>משקל משוער: ${Math.round(total * ((r.times || {}).bake ? 0.9 : 1))} ג׳</span></div></div>
+      <script>onload=()=>setTimeout(()=>print(),300)<\/script></body></html>`);
+    w.document.close();
+  }
+  A.printLabel = printLabel;
 
   /* ---------- מצב אפייה ---------- */
   function cookMode(r) {
@@ -261,7 +312,7 @@
     el.innerHTML = `<div class="cook-inner">
       <div class="row between section"><h2 style="font-size:2rem">${U.esc(r.name)}${f !== 1 ? ` <span class="muted" style="font-size:1.1rem">×${U.fmt(f)}</span>` : ''}</h2><button class="btn ghost" data-x>${A.icon('x')}יציאה</button></div>
       <div class="grid g2">
-        <div class="card"><h3 style="margin-bottom:8px">מצרכים</h3>${r.ingredients.map(l => { const d = displayLine(l, f, view.mode); return `<div class="ing-check"><input type="checkbox"><b>${A.fmtQty(d.q, d.unit)} ${unitLabel(d.unit, d.q)}</b> ${U.esc(d.ing ? d.ing.name : l.name || '')}${l.section ? ` <span class="muted small">· ${U.esc(l.section)}</span>` : ''}</div>`; }).join('')}</div>
+        <div class="card"><h3 style="margin-bottom:8px">מצרכים</h3>${r.ingredients.map(l => { const d = displayLine(l, f, view.mode); return `<div class="ing-check"><input type="checkbox"><b>${A.fmtQty(d.q, d.unit)} ${unitLabel(d.unit, d.q)}</b> ${U.esc(d.sub ? 'מתכון: ' + d.sub.name : d.ing ? d.ing.name : l.name || '')}${l.section ? ` <span class="muted small">· ${U.esc(l.section)}</span>` : ''}</div>`; }).join('')}</div>
         <div class="card"><h3 style="margin-bottom:8px">שלבים</h3><ol class="steps">${(r.steps || []).map(s => `<li>${U.esc(s)}</li>`).join('')}</ol>
           <div class="row" style="margin-top:12px">${[5, 10, 15, 30].map(m => `<button class="btn sm ghost" data-t="${m}">${A.icon('timer')}${m} דק׳</button>`).join('')}${r.times && r.times.bake ? `<button class="btn sm" data-t="${r.times.bake}">אפייה ${r.times.bake} דק׳</button>` : ''}</div></div>
       </div></div>`;
@@ -282,7 +333,7 @@
     if (!d.ingredients.length) d.ingredients.push({ ingId: '', qty: '', unit: 'g', section: '' });
     const ingName = id => (C.ing(id) || {}).name || '';
     const lineHtml = l => `<div class="line-row" data-line>
-      <input list="ingList" value="${U.esc(l.ingId ? ingName(l.ingId) : l.name || '')}" placeholder="מצרך" data-k="name">
+      <input list="ingList" value="${U.esc(l.subId ? 'מתכון: ' + ((C.recipe(l.subId) || {}).name || '') : l.ingId ? ingName(l.ingId) : l.name || '')}" placeholder="מצרך או מתכון" data-k="name">
       <input type="number" step="any" min="0" value="${l.qty}" placeholder="כמות" data-k="qty">
       <select data-k="unit">${A.unitOpts(l.unit)}</select>
       <input class="note" value="${U.esc(l.section || '')}" placeholder="קבוצה (למשל: מילוי)" data-k="section" list="secList">
@@ -290,7 +341,7 @@
     const t = d.times || {};
     A.modal({
       title: isNew ? 'מתכון חדש' : 'עריכת מתכון', size: 'wide',
-      body: `<datalist id="ingList">${A.state.ingredients.slice().sort((a, b) => a.name.localeCompare(b.name, 'he')).map(i => `<option value="${U.esc(i.name)}">`).join('')}</datalist>
+      body: `<datalist id="ingList">${A.state.ingredients.slice().sort((a, b) => a.name.localeCompare(b.name, 'he')).map(i => `<option value="${U.esc(i.name)}">`).join('')}${A.state.recipes.filter(x => !r || x.id !== r.id).map(x => `<option value="מתכון: ${U.esc(x.name)}">`).join('')}</datalist>
         <datalist id="secList"><option value="בצק"><option value="מילוי"><option value="ציפוי"><option value="בסיס"><option value="קרם"><option value="קישוט"></datalist>
         <div class="form-grid c3">
           <label class="field full"><span>שם המתכון *</span><input name="name" value="${U.esc(d.name)}" autofocus required></label>
@@ -317,7 +368,15 @@
         <div class="line-row head"><span>מצרך</span><span>כמות</span><span>יחידה</span><span class="note">קבוצה</span><span></span></div>
         <div id="lines">${d.ingredients.map(lineHtml).join('')}</div>
         <button class="btn ghost sm" data-add>${A.icon('plus')}הוספת מצרך</button>
-        <p class="small muted">מצרך שלא קיים במחסן ייווצר אוטומטית — אחר כך עדכני לו מחיר.</p>
+        <p class="small muted">מצרך שלא קיים במחסן ייווצר אוטומטית — אחר כך עדכני לו מחיר. אפשר גם לבחור "מתכון: …" כדי להשתמש במתכון אחר כרכיב (למשל בצק או קרם) — כמות = מספר מנות מתכון.</p>
+        <div class="divider"></div>
+        <h4 style="margin-bottom:10px">אחסון וחיי מדף (בימים)</h4>
+        <div class="form-grid c4">
+          <label class="field"><span>טמפרטורת החדר</span><input type="number" min="0" name="s_room" value="${(d.storage || {}).room || ''}"></label>
+          <label class="field"><span>מקרר</span><input type="number" min="0" name="s_fridge" value="${(d.storage || {}).fridge || ''}"></label>
+          <label class="field"><span>מקפיא</span><input type="number" min="0" name="s_freezer" value="${(d.storage || {}).freezer || ''}"></label>
+          <label class="field"><span>הוראות אחסון</span><input name="s_note" value="${U.esc((d.storage || {}).note || '')}" placeholder="למשל: במקרר בכלי סגור"></label>
+        </div>
         <div class="divider"></div>
         <div class="form-grid">
           <label class="field full"><span>תיאור קצר</span><input name="description" value="${U.esc(d.description)}"></label>
@@ -334,8 +393,10 @@
         const lines = dlg.querySelector('#lines');
         const readLines = () => [...lines.querySelectorAll('[data-line]')].map(row => {
           const g = k => row.querySelector(`[data-k="${k}"]`).value.trim();
-          const name = g('name'), ing = A.state.ingredients.find(i => i.name === name);
-          return { ingId: ing ? ing.id : '', name, qty: U.num(g('qty')), unit: g('unit'), section: g('section') };
+          const name = g('name');
+          if (name.startsWith('מתכון: ')) { const sub = A.state.recipes.find(x => x.name === name.slice(7)); if (sub && (!r || sub.id !== r.id)) return { subId: sub.id, name, qty: U.num(g('qty')) || 1, unit: 'batch', section: g('section') }; }
+          const ing = A.state.ingredients.find(i => i.name === name);
+          return { ingId: ing ? ing.id : '', name, qty: U.num(g('qty')), unit: g('unit') === 'batch' ? 'g' : g('unit'), section: g('section') };
         }).filter(l => l.name);
         const live = () => {
           const ls = readLines(), y = U.num(dlg.querySelector('[name=yield]').value) || 1;
@@ -360,6 +421,8 @@
             if (!v.name) { A.toast('חסר שם למתכון'); dlg.querySelector('[name=name]').focus(); return; }
             if (!(v.yield > 0)) { A.toast('כמות היחידות חייבת להיות גדולה מ־0'); return; }
             const ls = readLines().map(l => {
+              if (l.subId) return { subId: l.subId, qty: l.qty, unit: 'batch', section: l.section };
+              if (l.name.startsWith('מתכון: ')) l.name = l.name.slice(7);
               if (!l.ingId) { // יצירת מצרך חדש
                 const ni = { id: U.uid(), name: l.name, category: 'אחר', pkgPrice: 0, pkgSize: 1, pkgUnit: 'kg', gramsPerCup: 240, gramsPerUnit: 0, allergens: [], stock: 0, minStock: 0, supplier: '', estimated: false };
                 A.state.ingredients.push(ni); l.ingId = ni.id;
@@ -372,7 +435,8 @@
               packagingPerUnit: v.packagingPerUnit || 0, otherCost: v.otherCost || 0, ovenTemp: v.ovenTemp || '',
               times: { prep: v.t_prep || 0, rest: v.t_rest || 0, bake: v.t_bake || 0, cool: v.t_cool || 0, decor: v.t_decor || 0 },
               ingredients: ls, steps: v.steps.split('\n').map(s => s.trim()).filter(Boolean), notes: v.notes,
-              tags: v.tags.split(',').map(s => s.trim()).filter(Boolean), description: v.description, image: d.image || '', demo: false
+              tags: v.tags.split(',').map(s => s.trim()).filter(Boolean), description: v.description, image: d.image || '', demo: false,
+              storage: { room: v.s_room || 0, fridge: v.s_fridge || 0, freezer: v.s_freezer || 0, note: v.s_note || '' }
             });
             if (isNew) A.state.recipes.push(target);
             A.save(); A.closeModal();

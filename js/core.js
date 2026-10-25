@@ -46,7 +46,7 @@
   /* ---------- יחידות והמרות ---------- */
   // כוס ישראלית = 240 מ"ל, כף = 15 מ"ל, כפית = 5 מ"ל
   A.UNITS = {
-    g: 'גרם', kg: 'ק״ג', ml: 'מ״ל', l: 'ליטר', cup: 'כוס', tbsp: 'כף', tsp: 'כפית', unit: 'יחידה', pinch: 'קורט'
+    g: 'גרם', kg: 'ק״ג', ml: 'מ״ל', l: 'ליטר', cup: 'כוס', tbsp: 'כף', tsp: 'כפית', unit: 'יחידה', pinch: 'קורט', batch: 'מנת מתכון'
   };
   A.PKG_UNITS = { g: 'גרם', kg: 'ק״ג', ml: 'מ״ל', l: 'ליטר', unit: 'יחידות' };
   A.toGrams = (qty, unit, ing) => {
@@ -61,6 +61,7 @@
       case 'tsp': return q * gpc / 48;
       case 'unit': return q * ((ing && +ing.gramsPerUnit) || 0);
       case 'pinch': return q * 0.4;
+      case 'batch': return 0;
       default: return q;
     }
   };
@@ -103,10 +104,10 @@
   A.STATUS_FLOW = ['new', 'confirmed', 'baking', 'ready', 'delivered'];
   A.SOURCES = ['וואטסאפ', 'אינסטגרם', 'פייסבוק', 'המלצה', 'טלפון', 'טופס הזמנה', 'לקוחה חוזרת', 'אחר'];
   A.PAY_METHODS = ['ביט', 'פייבוקס', 'מזומן', 'העברה בנקאית', 'אשראי', 'אחר'];
-  A.RECIPE_CATS = ['עוגות', 'עוגות שמרים', 'עוגיות', 'לחמים וחלות', 'מאפים מלוחים', 'קינוחים', 'עוגות מעוצבות', 'מארזים', 'אחר'];
+  A.RECIPE_CATS = ['עוגות', 'עוגות שמרים', 'עוגיות', 'לחמים וחלות', 'מאפים מלוחים', 'קינוחים', 'עוגות מעוצבות', 'מארזים', 'בסיסים וקרמים', 'אחר'];
   A.ING_CATS = ['קמחים', 'סוכרים וממתיקים', 'מוצרי חלב', 'ביצים', 'שומנים ושמנים', 'שוקולד וקקאו', 'אגוזים וזרעים', 'תפיחה ושמרים', 'תבלינים ותמציות', 'ממרחים ומילויים', 'אריזות', 'אחר'];
   A.ALLERGENS = ['גלוטן', 'חלב', 'ביצים', 'אגוזים', 'בוטנים', 'שומשום', 'סויה'];
-  A.EXPENSE_CATS = ['חומרי גלם', 'אריזות', 'ציוד וכלים', 'שיווק ופרסום', 'משלוחים ונסיעות', 'חשמל וגז', 'השתלמויות', 'אחר'];
+  A.EXPENSE_CATS = ['חומרי גלם', 'אריזות', 'פחת ומוצרים שנזרקו', 'ציוד וכלים', 'שיווק ופרסום', 'משלוחים ונסיעות', 'חשמל וגז', 'השתלמויות', 'אחר'];
   A.WHEEL_AREAS = [
     { name: 'בריאות וגוף', hint: 'אנרגיה, שינה, תזונה, תנועה' },
     { name: 'רגשות ומשמעות', hint: 'שמחה, שקט פנימי, תחושת משמעות' },
@@ -187,6 +188,7 @@
     if (!s) { try { s = JSON.parse(root.localStorage.getItem(DB) || 'null'); } catch (e) { s = null; } }
     A.state = A.normalize(s);
     if (!A.state.seeded && A.seed) { A.seed.catalog(A.state); A.state.seeded = true; A.saveNow(); }
+    if (A.seed && A.seed.library && A.seed.library(A.state)) A.saveNow();
     return A.state;
   };
   A.saveNow = async () => {
@@ -206,9 +208,15 @@
   C.recipe = id => A.state.recipes.find(r => r.id === id);
 
   // עלות של שורת מצרך במתכון
-  C.lineCost = (line, factor = 1) => {
-    const ing = C.ing(line.ingId);
+  C.lineCost = (line, factor = 1, depth = 0) => {
     const qty = (+line.qty || 0) * factor;
+    if (line.subId) { // תת־מתכון: עלות חומרי הגלם שלו לפי מספר המנות
+      const sub = C.recipe(line.subId);
+      if (!sub || depth > 5) return { cost: 0, missing: true, reason: sub ? 'קישור מעגלי' : 'תת־מתכון חסר' };
+      const sc = C.recipeCost(sub, A.state.settings, depth + 1);
+      return { cost: sc.ingredients * qty, missing: sc.missing.length > 0, reason: sc.missing.length ? 'חסרים מחירים בתת־המתכון' : '' };
+    }
+    const ing = C.ing(line.ingId);
     if (!ing) return { cost: 0, missing: true, reason: 'מצרך לא מקושר' };
     if (!(+ing.pkgPrice > 0) || !(+ing.pkgSize > 0)) return { cost: 0, missing: !ing.free, reason: 'חסר מחיר' };
     if (line.unit === 'unit' && ing.pkgUnit === 'unit') return { cost: qty * ing.pkgPrice / ing.pkgSize };
@@ -221,20 +229,24 @@
     const prep = +t.prep || 0, decor = +t.decor || 0, rest = +t.rest || 0, bake = +t.bake || 0, cool = +t.cool || 0;
     return { prep, decor, rest, bake, cool, active: prep + decor, oven: bake, total: prep + decor + rest + bake + cool };
   };
-  C.recipeCost = (r, settings = A.state.settings) => {
+  C.recipeCost = (r, settings = A.state.settings, depth = 0) => {
     const y = Math.max(+r.yield || 1, 0.0001);
     let ingredients = 0; const missing = [];
     (r.ingredients || []).forEach(l => {
-      const c = C.lineCost(l); ingredients += c.cost;
-      if (c.missing) { const ing = C.ing(l.ingId); missing.push((ing ? ing.name : l.name || '?') + ' — ' + c.reason); }
+      const c = C.lineCost(l, 1, depth); ingredients += c.cost;
+      if (c.missing) { const nm = l.subId ? (C.recipe(l.subId) || {}).name : (C.ing(l.ingId) || {}).name; missing.push((nm || l.name || '?') + ' — ' + c.reason); }
     });
     const t = C.times(r);
+    // זמן עבודה ותנור של תתי־מתכונים נכנס לתמחור של המתכון שמשתמש בהם
+    let subActive = 0, subOven = 0;
+    if (depth < 5) (r.ingredients || []).forEach(l => { const s = l.subId && C.recipe(l.subId); if (s) { const sc = C.recipeCost(s, settings, depth + 1); subActive += sc.activeAll * (+l.qty || 0); subOven += sc.ovenAll * (+l.qty || 0); } });
+    const activeAll = t.active + subActive, ovenAll = t.oven + subOven;
     const packaging = (+r.packagingPerUnit || 0) * y;
-    const labor = t.active / 60 * (+settings.hourlyRate || 0);
-    const overhead = t.oven / 60 * (+settings.ovenCostPerHour || 0) + (+r.otherCost || 0);
+    const labor = activeAll / 60 * (+settings.hourlyRate || 0);
+    const overhead = ovenAll / 60 * (+settings.ovenCostPerHour || 0) + (+r.otherCost || 0);
     const direct = ingredients + packaging + overhead; // עלות ללא שכר עבודה
     const total = direct + labor;
-    return { ingredients, packaging, labor, overhead, direct, total, perUnit: total / y, directPerUnit: direct / y, ingPerUnit: ingredients / y, missing, times: t, yield: y };
+    return { ingredients, packaging, labor, overhead, direct, total, perUnit: total / y, directPerUnit: direct / y, ingPerUnit: ingredients / y, missing, times: t, yield: y, activeAll, ovenAll };
   };
   C.vatFactor = (s = A.state.settings) => s.vatMode === 'licensed' ? 1 + (+s.vatRate || 0) : 1;
   C.pricing = (r, settings = A.state.settings) => {
@@ -247,17 +259,34 @@
     const profit = net - c.perUnit;
     const margin = net ? profit / net : 0;
     const foodCost = net ? c.ingPerUnit / net : 0;
-    const hours = c.times.active / 60;
+    const hours = c.activeAll / 60;
     const earnPerHour = hours ? (net - c.directPerUnit) * c.yield / hours : 0; // מה נשאר לך לשעת עבודה
     let status = 'none';
     if (price) status = margin >= tm - 0.005 ? 'ok' : margin >= 0 ? 'warn' : 'bad';
     return Object.assign(c, { suggested, minimum, price, net, profit, margin, foodCost, earnPerHour, status, targetMargin: tm });
   };
-  C.allergens = r => {
+  C.allergens = (r, depth = 0) => {
     const set = new Set();
-    (r.ingredients || []).forEach(l => { const i = C.ing(l.ingId); (i && i.allergens || []).forEach(a => set.add(a)); });
+    (r.ingredients || []).forEach(l => {
+      if (l.subId) { const s = C.recipe(l.subId); if (s && depth < 5) C.allergens(s, depth + 1).forEach(a => set.add(a)); return; }
+      const i = C.ing(l.ingId); (i && i.allergens || []).forEach(a => set.add(a));
+    });
     return [...set];
   };
+  // רשימת מצרכים שטוחה בגרמים (כולל תתי־מתכונים) — לתוויות ולרשימות קניות
+  C.flatten = (r, mult = 1, out = {}, depth = 0) => {
+    (r.ingredients || []).forEach(l => {
+      if (l.subId) { const s = C.recipe(l.subId); if (s && depth < 5) C.flatten(s, mult * (+l.qty || 0), out, depth + 1); return; }
+      const ing = C.ing(l.ingId); if (!ing) return;
+      const e = out[ing.id] = out[ing.id] || { ing, grams: 0, units: 0 };
+      if (l.unit === 'unit' && ing.pkgUnit === 'unit') e.units += (+l.qty || 0) * mult;
+      else e.grams += A.toGrams((+l.qty || 0) * mult, l.unit, ing);
+      if (l.unit === 'unit' && ing.pkgUnit === 'unit' && ing.gramsPerUnit) e.gramsEq = (e.gramsEq || 0) + (+l.qty || 0) * mult * ing.gramsPerUnit;
+    });
+    return out;
+  };
+  // זמנים כוללים של תתי־מתכונים (לשימוש בתזמון)
+  C.usedAsSub = id => A.state.recipes.filter(r => (r.ingredients || []).some(l => l.subId === id));
   C.orderTotals = o => {
     const subtotal = U.sum(o.items || [], i => (+i.qty || 0) * (+i.unitPrice || 0));
     const discount = +o.discount || 0, delivery = o.method === 'delivery' ? (+o.deliveryFee || 0) : 0;
@@ -269,7 +298,7 @@
       if (r) {
         const rc = C.recipeCost(r);
         cost += rc.directPerUnit * (+i.qty || 0);
-        activeMin += rc.times.active * (+i.qty || 0) / rc.yield;
+        activeMin += rc.activeAll * (+i.qty || 0) / rc.yield;
       } else cost += (+i.unitCost || 0) * (+i.qty || 0);
     });
     const vf = C.vatFactor();
@@ -299,12 +328,10 @@
       return { recipe: e.recipe, units: e.units, batches, active: t.active * batches, oven: t.oven * batches, orders: e.orders.size };
     }).sort((a, b) => b.units - a.units);
     const needs = {};
-    rows.forEach(row => (row.recipe.ingredients || []).forEach(l => {
-      const ing = C.ing(l.ingId); if (!ing) return;
-      const n = needs[ing.id] = needs[ing.id] || { ing, grams: 0, units: 0, cost: 0 };
-      if (l.unit === 'unit' && ing.pkgUnit === 'unit') n.units += (+l.qty || 0) * row.batches;
-      else n.grams += A.toGrams((+l.qty || 0) * row.batches, l.unit, ing);
-      n.cost += C.lineCost(l, row.batches).cost;
+    rows.forEach(row => Object.values(C.flatten(row.recipe, row.batches)).forEach(f => {
+      const ing = f.ing, n = needs[ing.id] = needs[ing.id] || { ing, grams: 0, units: 0, cost: 0 };
+      n.grams += f.grams; n.units += f.units;
+      n.cost += C.lineCost({ ingId: ing.id, qty: f.grams, unit: 'g' }).cost + (f.units ? C.lineCost({ ingId: ing.id, qty: f.units, unit: 'unit' }).cost : 0);
     }));
     const shopping = Object.values(needs).map(n => {
       const ing = n.ing;

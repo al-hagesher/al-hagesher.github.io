@@ -29,7 +29,7 @@
     const tot = orders.map(o => ({ o, t: C.orderTotals(o) }));
     const revenue = U.sum(tot, x => x.t.total), profit = U.sum(tot, x => x.t.profit), cost = U.sum(tot, x => x.t.cost);
     const minutes = U.sum(tot, x => x.t.activeMin);
-    return { orders, tot, revenue, profit, cost, minutes, count: orders.length, avg: orders.length ? revenue / orders.length : 0, unpaid: U.sum(tot, x => x.t.balance) };
+    return { from, to, orders, tot, revenue, profit, cost, minutes, count: orders.length, avg: orders.length ? revenue / orders.length : 0, unpaid: U.sum(tot, x => x.t.balance) };
   };
 
   const delta = (cur, prev) => {
@@ -102,6 +102,7 @@
           <div class="table-wrap"><table><thead><tr><th>מוצר</th><th class="n">נמכרו</th><th class="n">הכנסות</th><th class="n">עלות</th><th class="n">רווח</th><th class="n">שולי רווח</th></tr></thead><tbody>
           ${byRev.map(p => `<tr ${p.rec ? `class="click" data-recipe="${p.rec.id}"` : ''}><td><b>${U.esc(p.name)}</b></td><td class="n">${U.fmt(p.qty)}</td><td class="n">${U.money(p.revenue, 0)}</td><td class="n">${U.money(p.cost, 0)}</td><td class="n">${U.money(p.profit, 0)}</td><td class="n"><span class="badge ${p.margin >= 0.5 ? 'ok' : p.margin >= 0.3 ? 'warn' : 'bad'}">${U.pct(p.margin)}</span></td></tr>`).join('') || '<tr><td colspan="6" class="muted">אין נתונים</td></tr>'}
           </tbody></table></div></div>
+        ${menuEngineering(products)}
         <div class="grid g2">
           <div class="card"><div class="card-h"><h3>הזמנות לפי יום מסירה</h3></div>${A.chart.bars(wd, { height: 200, fmt: v => U.fmt(Math.round(v)) })}</div>
           <div class="card"><div class="card-h"><h3>מאיפה מגיעות ההזמנות</h3></div>${A.chart.donut(src)}</div>
@@ -112,6 +113,28 @@
       };
     }
   };
+
+  // הנדסת תפריט (Kasavana & Smith): פופולריות מול רווח ליחידה
+  function menuEngineering(products) {
+    const items = products.filter(p => p.rec && p.qty > 0);
+    if (items.length < 3) return `<div class="card section"><div class="card-h"><h3>${A.icon('star')}הנדסת תפריט</h3></div><p class="muted" style="margin:0">צריך לפחות 3 מוצרים שנמכרו בתקופה כדי לסווג את התפריט.</p></div>`;
+    const totalQty = U.sum(items, p => p.qty), totalProfit = U.sum(items, p => p.profit);
+    const popLine = 0.7 / items.length, avgMargin = totalProfit / totalQty;
+    const Q = { star: [], plow: [], puzzle: [], dog: [] };
+    items.forEach(p => {
+      const pop = p.qty / totalQty >= popLine, prof = p.profit / p.qty >= avgMargin;
+      Q[pop && prof ? 'star' : pop ? 'plow' : prof ? 'puzzle' : 'dog'].push(p);
+    });
+    const box = (k, title, txt, cls) => `<div class="card flat" style="padding:14px;border-color:var(--line-2)"><div class="row between"><b>${title}</b><span class="badge ${cls}">${Q[k].length}</span></div>
+      <p class="small muted" style="margin:4px 0 8px">${txt}</p>${Q[k].map(p => `<span class="chip" style="margin:2px">${U.esc(p.name)} · ${U.money(p.profit / p.qty)}</span>`).join('') || '<span class="small muted">—</span>'}</div>`;
+    return `<div class="card section"><div class="card-h"><h3>${A.icon('star')}הנדסת תפריט</h3><span class="small muted">רווח ממוצע ליחידה ${U.money(avgMargin)} · סף פופולריות ${U.pct(popLine)} מהמכירות</span></div>
+      <div class="grid g2" style="gap:10px">
+        ${box('star', '⭐ כוכבים', 'נמכרים הרבה ורווחיים. לשמור על האיכות, לשים במקום בולט, לא להוריד מחיר.', 'ok')}
+        ${box('plow', '🐎 סוסי עבודה', 'נמכרים הרבה אבל מרוויחים מעט. להעלות מחיר בהדרגה או להוזיל עלות/גודל מנה.', 'warn')}
+        ${box('puzzle', '🧩 חידות', 'רווחיים אבל נמכרים מעט. לקדם: צילום טוב, המלצה, מארז.', 'info')}
+        ${box('dog', '🍂 לבחינה', 'מעט מכירות ומעט רווח. לשפר, לשלב במארז — או להוריד מהתפריט.', 'bad')}
+      </div></div>`;
+  }
 
   function insights(st, ps, products, wd, src, custs, months) {
     const out = [], add = (cls, icon, html) => out.push(`<div class="insight ${cls}"><div class="ic">${A.icon(icon)}</div><div>${html}</div></div>`);
@@ -131,6 +154,8 @@
         add('alert', 'wallet', `<b>${U.esc(weak.name)}</b> ברווחיות נמוכה (${U.pct(weak.margin)} לפני שכר). ${p.suggested > p.price ? `המחיר המומלץ: <b>${U.money(p.suggested)}</b> במקום ${U.money(p.price)}.` : 'בדקי עלויות חומרי הגלם או גודל המנה.'}`);
       }
     }
+    const waste = U.sum(A.state.expenses.filter(e => e.category === 'פחת ומוצרים שנזרקו' && e.date >= st.from && e.date <= st.to), e => e.amount);
+    if (waste && st.revenue) add(waste / st.revenue > 0.05 ? 'alert' : 'good', 'trash', `פחת: ${U.money(waste, 0)} (${U.pct(waste / st.revenue)} מההכנסות). ${waste / st.revenue > 0.05 ? 'מעל 5% — כדאי לבדוק עודפי ייצור ומוצרים שלא נמכרו.' : 'נמוך — ניהול מלאי טוב.'}`);
     const lossMakers = A.state.recipes.filter(r => r.price && C.pricing(r).status === 'bad');
     if (lossMakers.length) add('alert', 'alert', `${lossMakers.length === 1 ? 'מתכון אחד' : lossMakers.length + ' מתכונים'} לא מכסים את העלות המלאה כולל שכר: ${lossMakers.slice(0, 3).map(r => `<a href="#/recipe/${r.id}">${U.esc(r.name)}</a>`).join(', ')}.`);
     const maxD = wd.reduce((m, d, i) => d.value > wd[m].value ? i : m, 0);

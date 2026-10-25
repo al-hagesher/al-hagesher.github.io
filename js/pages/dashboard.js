@@ -24,7 +24,7 @@
       if (late.length) alerts.push(['alert', `${late.length} הזמנות מתאריך שעבר עדיין לא סומנו כנמסרו`, 'orders']);
       const low = A.state.ingredients.filter(i => +i.minStock > 0 && (+i.stock || 0) < +i.minStock);
       if (low.length) alerts.push(['box', `חסר במלאי: ${low.slice(0, 4).map(i => i.name).join(', ')}${low.length > 4 ? '…' : ''}`, 'pantry']);
-      const noPrice = A.state.recipes.filter(r => !r.price);
+      const noPrice = A.state.recipes.filter(r => !r.price && !(A.isComponent && A.isComponent(r)));
       if (noPrice.length) alerts.push(['wallet', `${noPrice.length} מתכונים בלי מחיר מכירה`, 'recipes']);
       const loss = A.state.recipes.filter(r => r.price && C.pricing(r).status === 'bad');
       if (loss.length) alerts.push(['alert', `${loss.length} מתכונים מתומחרים מתחת לעלות המלאה`, 'recipes']);
@@ -36,13 +36,14 @@
       const lastWheel = A.state.wheel.entries.map(e => e.date).sort().pop();
       if (!lastWheel || U.diffDays(today, lastWheel) > 30) alerts.push(['wheel', lastWheel ? 'הגיע הזמן לבדיקת גלגל החיים החודשית' : 'עוד לא מילאת את גלגל החיים', 'wheel']);
 
-      const first = !A.state.recipes.length && !A.state.orders.length;
+      const first = !A.state.orders.length && !s.welcomeDone;
       const goal = +s.monthlyGoal || 0;
       main.innerHTML = `
       ${first ? `<div class="card welcome section cables">
         <h2 style="margin-bottom:8px">ברוכה הבאה למערכת של על הגשר 🤎</h2>
-        <p style="margin:0 0 14px;opacity:.9">מתכונים עם עלות ותמחור, הזמנות, תכנון ייצור, סטטיסטיקות וגלגל החיים — הכל במקום אחד. כבר הכנתי מחסן עם ${A.state.ingredients.length} מצרכים נפוצים ומחירים משוערים.</p>
-        <div class="row"><button class="btn soft" data-act="demo">להתחיל עם נתוני דוגמה</button><button class="btn ghost" data-act="newRecipe">${A.icon('plus')}להוסיף מתכון ראשון</button><a class="btn ghost" href="#/settings">הגדרות תמחור</a></div></div>` : ''}
+        <p style="margin:0 0 14px;opacity:.9">כבר מחכים לך ${A.state.recipes.filter(r => r.library).length} מתכוני בסיס מדויקים בגרמים, מחסן עם ${A.state.ingredients.length} מצרכים ומחירים משוערים, ותמחור אוטומטי לכל מתכון. שלושה צעדים לפתיחה:</p>
+        <ol style="margin:0 0 14px;padding-inline-start:20px;line-height:1.9;opacity:.95"><li>בהגדרות: השכר השעתי שלך ויעד הרווח</li><li>במחסן: עדכון מחירי המצרכים לפי הקבלות</li><li>בטופס ההזמנות: יצירת קישור קבוע ללקוחות</li></ol>
+        <div class="row"><a class="btn soft" href="#/settings">להתחיל בהגדרות</a><a class="btn ghost" href="#/recipes">למתכונים</a><button class="btn ghost" data-act="demo">לנסות עם נתוני דוגמה</button><button class="btn ghost" data-act="dismiss">${A.icon('x')}הבנתי</button></div></div>` : ''}
       <div class="grid g4 section">
         <div class="card kpi"><div class="lbl">${A.icon('orders')}להיום</div><div class="val">${todayO.length}</div><div class="sub">${tmrO.length} מחר · ${weekO.length} בהמשך השבוע</div></div>
         <div class="card kpi"><div class="lbl">${A.icon('calendar')}7 הימים הקרובים</div><div class="val">${U.money(weekRev, 0)}</div><div class="sub">הכנסות צפויות</div></div>
@@ -76,6 +77,7 @@
         const b = e.target.closest('[data-act]'); if (!b) return;
         if (b.dataset.act === 'newOrder') A.editOrder();
         if (b.dataset.act === 'newRecipe') A.editRecipe();
+        if (b.dataset.act === 'dismiss') { s.welcomeDone = true; A.commit(); return; }
         if (b.dataset.act === 'demo') { A.seed.demo(A.state); A.commit('נתוני הדוגמה נטענו — אפשר למחוק אותם בהגדרות'); }
       };
       main.onclick = act;

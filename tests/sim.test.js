@@ -2,7 +2,7 @@
 const fs = require('fs'), path = require('path'), vm = require('vm'), assert = require('assert');
 const ctx = { console, Intl, TextEncoder, TextDecoder, btoa: s => Buffer.from(s, 'binary').toString('base64'), atob: s => Buffer.from(s, 'base64').toString('binary') };
 ctx.window = ctx; vm.createContext(ctx);
-['js/core.js', 'js/seed.js', 'js/sync.js'].forEach(f => vm.runInContext(fs.readFileSync(path.join(__dirname, '..', f), 'utf8'), ctx, { filename: f }));
+['js/core.js', 'js/seed.js', 'js/library.js', 'js/sync.js', 'js/pages/production.js'].forEach(f => vm.runInContext(fs.readFileSync(path.join(__dirname, '..', f), 'utf8'), ctx, { filename: f }));
 const A = ctx.App, U = A.util, C = A.calc;
 let n = 0; const t = (name, fn) => { fn(); n++; console.log('✓', name); };
 const near = (a, b, eps = 0.01, msg) => assert.ok(Math.abs(a - b) <= eps, `${msg || ''} expected ${b}, got ${a}`);
@@ -191,5 +191,45 @@ t('חיבור מכשיר עם נתונים: איחוד מצרכים לפי שם'
   const m = A.syncMerge(null, local, remote);
   assert.strictEqual(m.ingredients.length, remote.ingredients.length, 'אין מצרכים כפולים');
   assert.strictEqual(m.recipes[0].ingredients[0].ingId, remote.ingredients.find(i => i.name === 'קמח לבן').id);
+});
+t('ספריית מתכונים: כל המצרכים מקושרים והעלויות תקינות', () => {
+  const save = A.state; const st = A.normalize(null); A.state = st;
+  st.settings.hourlyRate = 50; st.settings.ovenCostPerHour = 4; st.settings.targetMargin = 0.3;
+  const added = A.seed.library(st);
+  assert.ok(added >= 25, 'נוספו ' + added);
+  assert.strictEqual(A.seed.library(st), 0, 'לא מוסיף פעמיים');
+  st.recipes.forEach(r => {
+    r.ingredients.forEach(l => assert.ok(l.subId ? A.calc.recipe(l.subId) : l.ingId, r.name + ': שורה לא מקושרת'));
+    const p = A.calc.pricing(r);
+    assert.strictEqual(p.missing.length, 0, r.name + ': ' + p.missing.join());
+    assert.ok(isFinite(p.total) && p.ingredients > 0, r.name + ' עלות');
+    if (r.price) assert.ok(p.status !== 'bad', `${r.name}: מחיר ${r.price} מתחת לעלות ${U.round(p.perUnit)}`);
+    console.log(`   ${r.name}: חומרי גלם ${U.round(p.ingredients)} · ליח׳ ${U.round(p.perUnit)} · מחיר ${r.price || '—'} · ${r.price ? Math.round(p.margin * 100) + '%' : ''} · FC ${r.price ? Math.round(p.foodCost * 100) + '%' : ''}`);
+  });
+  // תת־מתכון: עלות הטארט כוללת את הבצק והקרם
+  const tart = A.calc.recipe('lib-fruit-tart'), crust = A.calc.recipe('lib-pate-sucree'), cream = A.calc.recipe('lib-pastry-cream');
+  const exp = A.calc.recipeCost(crust).ingredients + A.calc.recipeCost(cream).ingredients;
+  assert.ok(A.calc.recipeCost(tart).ingredients > exp, 'עלות טארט כוללת רכיבים');
+  ['גלוטן', 'חלב', 'ביצים', 'אגוזים'].forEach(a => assert.ok(A.calc.allergens(tart).includes(a), 'אלרגן ' + a));
+  // תכנון ייצור מפרק תתי־מתכונים לרשימת קניות
+  st.orders.push({ id: 'o', date: U.today(), status: 'new', items: [{ recipeId: 'lib-fruit-tart', qty: 2, unitPrice: 160 }] });
+  const pr = A.calc.production(U.today(), U.today());
+  const milk = pr.shopping.find(s => s.ing.name === 'חלב 3%');
+  near(milk.need, 1000 / 245 * 240 / 1000, 0.001, 'חלב לשני טארטים: 1000 ג׳ = כ־0.98 ליטר');
+  A.state = save;
+});
+t('לוח זמנים לאפייה מחושב אחורה', () => {
+  const save = A.state; const st = A.normalize(null); A.state = st; A.seed.library(st);
+  const d = U.addDays(U.today(), 2);
+  const o = { id: 'o', date: d, time: '12:00', status: 'new', items: [{ recipeId: 'lib-fruit-tart', qty: 1, unitPrice: 160 }, { recipeId: 'lib-challah', qty: 4, unitPrice: 28 }] };
+  const tasks = A.bakeSchedule([o]);
+  const tart = tasks.find(t => t.recipe.id === 'lib-fruit-tart' && !t.sub), cream = tasks.find(t => t.recipe.id === 'lib-pastry-cream');
+  const due = U.parse(d); due.setHours(12, 0, 0, 0);
+  assert.strictEqual(tart.ready.getTime(), due.getTime() - 30 * 60000, 'מוכן חצי שעה לפני המסירה');
+  assert.strictEqual(tart.start.getTime(), tart.ready.getTime() - tart.total * 60000);
+  assert.ok(cream && cream.ready.getTime() === tart.start.getTime(), 'הקרם מוכן כשמתחילים את הטארט');
+  const ch = tasks.find(t => t.recipe.id === 'lib-challah'); assert.strictEqual(ch.batches, 2, '4 חלות = 2 מנות (3 בכל מנה)');
+  for (let i = 1; i < tasks.length; i++) assert.ok(tasks[i - 1].start <= tasks[i].start, 'ממוין לפי שעת התחלה');
+  A.state = save;
 });
 console.log(`\n${n} בדיקות עברו`);

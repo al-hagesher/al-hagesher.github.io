@@ -51,7 +51,7 @@
             if (x) Object.assign(x, v, { demo: false }); else A.state.expenses.push(Object.assign({ id: U.uid() }, v));
             A.closeModal(); A.commit('נשמר');
           }
-          if (e.target.closest('[data-del]')) { A.state.expenses = A.state.expenses.filter(y => y !== x); A.closeModal(); A.commit('נמחק'); }
+          if (e.target.closest('[data-del]')) { A.state.expenses = A.state.expenses.filter(y => y !== x); A.closeModal(); A.commit(); A.undoToast('ההוצאה נמחקה', () => { A.state.expenses.push(x); A.commit(); }); }
         });
       }
     });

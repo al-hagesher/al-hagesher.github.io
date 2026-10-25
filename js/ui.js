@@ -48,10 +48,20 @@
   /* הודעה קצרה */
   let toastT;
   A.toast = msg => {
-    const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show');
+    const t = document.getElementById('toast'); t.textContent = msg; t.classList.remove('has-action'); t.classList.add('show');
     clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 2400);
   };
   A.onSaveError = () => A.toast('שגיאה בשמירה — מומלץ לגבות עכשיו');
+  // הודעה עם "ביטול" אחרי מחיקה (6 שניות)
+  A.undoToast = (msg, undo) => {
+    const t = document.getElementById('toast');
+    t.innerHTML = `<span>${U.esc(msg)}</span><button type="button">ביטול</button>`;
+    t.classList.add('show', 'has-action');
+    t.querySelector('button').onclick = () => { clearTimeout(toastT); t.classList.remove('show', 'has-action'); undo(); A.toast('שוחזר'); };
+    clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show', 'has-action'), 6000);
+    A.haptic();
+  };
+  A.haptic = () => { try { navigator.vibrate && navigator.vibrate(12); } catch (e) { } };
 
   /* דיאלוג */
   let pendingClose = null;
@@ -184,7 +194,7 @@
     return s + '</svg>';
   };
   // עוגה/טבעת
-  G.PALETTE = ['#4a2a16', '#b8875e', '#8f603f', '#d8bfa3', '#6b7f5e', '#a35c46', '#c9a77c', '#7d6a5a'];
+  G.PALETTE = ['var(--brown)', '#b8875e', '#8f603f', '#d8bfa3', '#6b7f5e', '#a35c46', '#c9a77c', '#7d6a5a'];
   G.donut = (data, { size = 180, fmt = v => U.fmt(v) } = {}) => {
     const total = U.sum(data, d => d.value);
     if (!total) return '<div class="empty small">אין נתונים</div>';

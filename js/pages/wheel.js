@@ -2,7 +2,7 @@
 (function (root) {
   const A = root.App, U = A.util, P = A.pages = A.pages || {};
   const view = { sel: null, cmp: 'prev', area: -1 };
-  const COLORS = ['#8f603f', '#b8875e', '#a35c46', '#6b7f5e', '#4a2a16', '#c9a77c', '#7d6a5a', '#9a7b4f'];
+  const COLORS = ['#8f603f', '#b8875e', '#a35c46', '#6b7f5e', '#6d4a33', '#c9a77c', '#7d6a5a', '#9a7b4f'];
   const avg = e => U.sum(e.scores) / e.scores.length;
   const entries = () => A.state.wheel.entries.slice().sort((a, b) => a.date.localeCompare(b.date));
 
@@ -130,7 +130,7 @@
           }
           if (e.target.closest('[data-del]')) {
             A.closeModal();
-            if (await A.confirm('למחוק את הבדיקה הזאת?', 'מחיקה')) { A.state.wheel.entries = A.state.wheel.entries.filter(y => y !== x); view.sel = null; A.commit('נמחק'); }
+            if (await A.confirm('למחוק את הבדיקה הזאת?', 'מחיקה')) { A.state.wheel.entries = A.state.wheel.entries.filter(y => y !== x); view.sel = null; A.commit(); A.undoToast('הבדיקה נמחקה', () => { A.state.wheel.entries.push(x); A.commit(); }); }
           }
         });
       }

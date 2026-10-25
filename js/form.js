@@ -170,7 +170,7 @@
       }
       const link = F.link();
       const fromForm = A.state.orders.filter(o => o.source === 'טופס הזמנה');
-      const recipes = A.state.recipes.slice().sort((a, b) => (a.category || '').localeCompare(b.category || '', 'he') || a.name.localeCompare(b.name, 'he'));
+      const recipes = A.state.recipes.filter(r => !(A.isComponent && A.isComponent(r)) || (f.products[r.id] || {}).on).sort((a, b) => (a.category || '').localeCompare(b.category || '', 'he') || a.name.localeCompare(b.name, 'he'));
       const onCount = F.productList().filter(r => F.priceOf(r) > 0).length;
       const shareText = `${f.title || 'הזמנות'} 🤎\nלהזמנה: ${link}`;
       A.setActions(`<a class="btn ghost" href="${U.esc(link)}" target="_blank" rel="noopener">${A.icon('link')}צפייה בטופס</a>`);

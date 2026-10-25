@@ -39,10 +39,9 @@
         <div class="card"><div class="card-h"><h3>גלגל החיים</h3></div>
           <p class="small muted" style="margin-top:0">אפשר לשנות את שמות התחומים (שינוי שם לא מוחק היסטוריה).</p>
           <div class="form-grid" data-form="wheel">${A.state.wheel.areas.map((a, i) => `<input data-area="${i}" value="${U.esc(a)}" aria-label="תחום ${i + 1}">`).join('')}</div></div>
-        <div class="card"><div class="card-h"><h3>נתוני דוגמה</h3></div>
-          <p class="small muted" style="margin-top:0">נתוני דוגמה (4 מתכונים, כ־70 הזמנות, הוצאות ושתי בדיקות גלגל) עוזרים להכיר את המערכת. הם מסומנים ונמחקים בלחיצה — בלי לגעת בנתונים שלך.</p>
-          <div class="row">${A.seed.hasDemo(A.state) ? `<button class="btn danger" data-act="clearDemo">${A.icon('trash')}מחיקת נתוני הדוגמה</button>` : `<button class="btn soft" data-act="demo">טעינת נתוני דוגמה</button>`}
-          <button class="btn ghost" data-act="catalog">השלמת קטלוג המצרכים</button></div></div>
+        <div class="card"><div class="card-h"><h3>מצרכים ומתכוני בסיס</h3></div>
+          <p class="small muted" style="margin-top:0">החזרת מצרכים נפוצים או מתכוני בסיס שנמחקו. לא נוגע במה שכבר קיים.</p>
+          <div class="row"><button class="btn ghost" data-act="catalog">השלמת קטלוג המצרכים</button><button class="btn ghost" data-act="library">החזרת מתכוני בסיס שנמחקו</button></div></div>
         <div class="card"><div class="card-h"><h3 style="color:var(--bad)">איפוס מלא</h3></div>
           <p class="small muted" style="margin-top:0">מוחק את כל הנתונים במכשיר הזה. לא ניתן לבטל — הורידי גיבוי קודם.</p>
           <button class="btn danger" data-act="reset">${A.icon('trash')}מחיקת כל הנתונים</button></div>
@@ -69,8 +68,7 @@
           s.lastBackup = U.today(); A.commit('הגיבוי ירד');
         }
         if (act === 'csv') exportCsv();
-        if (act === 'demo') { A.seed.demo(A.state); A.commit('נתוני הדוגמה נטענו'); }
-        if (act === 'clearDemo') { if (await A.confirm('למחוק את כל נתוני הדוגמה? הנתונים שלך יישארו.', 'מחיקה')) { A.seed.clearDemo(A.state); A.commit('נתוני הדוגמה נמחקו'); } }
+        if (act === 'library') { A.state.deletedLibrary = []; const n = A.seed.library(A.state, true); A.commit(n ? `הוחזרו ${n} מתכונים` : 'כל מתכוני הבסיס כבר קיימים'); }
         if (act === 'catalog') { const n = A.state.ingredients.length; A.seed.catalog(A.state); A.commit(`נוספו ${A.state.ingredients.length - n} מצרכים`); }
         if (act === 'reset') {
           const synced = A.sync && A.sync.enabled();

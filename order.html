@@ -77,6 +77,11 @@
     .loader { width: 34px; height: 34px; border: 3px solid var(--sand); border-top-color: var(--brown); border-radius: 50%; animation: spin 0.9s linear infinite; margin: 60px auto; }
     @keyframes spin { to { transform: rotate(360deg); } }
     .missing { outline: 2px solid var(--bad); outline-offset: 2px; border-radius: 12px; }
+    .paybox-note { background: var(--sand-2); border-radius: 12px; padding: 10px 14px; font-size: .92rem; color: var(--brown); margin-bottom: 12px; }
+    .pay-step { border-top: 1px solid var(--line); margin-top: 16px; padding-top: 6px; }
+    .pay-step .due { font-family: 'Frank Ruhl Libre', serif; font-size: 2.2rem; color: var(--brown); }
+    .pay-opt { display: flex; align-items: center; justify-content: space-between; gap: 12px; text-align: right; border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; margin-top: 10px; background: var(--paper); }
+    .paid-ok { background: var(--ok-bg); color: var(--ok); border-radius: 12px; padding: 12px; font-weight: 600; }
     footer { text-align: center; color: var(--muted); font-size: .8rem; margin-top: 30px; }
   </style>
 </head>
@@ -179,7 +184,7 @@
         <label><span>טלפון *</span><input id="f_p" type="tel" inputmode="tel" autocomplete="tel" placeholder="050-0000000" value="${esc(saved.phone || '')}"></label>
         <label><span>אלרגיות / רגישויות</span><input id="f_al" placeholder="למשל: ללא אגוזים"></label>
         <label><span>הערות (הקדשה, צבעים, בקשות)</span><textarea id="f_no" rows="3"></textarea></label>
-        ${cfg.payInfo ? `<p class="note">💳 ${esc(cfg.payInfo)}</p>` : ''}
+        ${payRule() ? `<div class="paybox-note">💳 ${payRule()}</div>` : cfg.payInfo ? `<p class="note">💳 ${esc(cfg.payInfo)}</p>` : ''}
         ${cfg.terms ? `<label class="check"><input type="checkbox" id="f_terms"><span>${esc(cfg.terms)}</span></label>` : ''}
         <div id="err"></div>
         <footer>${esc(cfg.bizName || 'על הגשר')} · ההזמנה תאושר סופית לאחר אישור בעלת העסק</footer>`;
@@ -187,11 +192,21 @@
       if (st.date) { const b = app.querySelector(`[data-date="${st.date}"]`); if (b) b.scrollIntoView({ block: 'nearest', inline: 'center' }); }
       bar();
     }
+    const pay = () => cfg.pay || { mode: 'none' };
+    const dueFor = total => pay().mode === 'full' ? total : pay().mode === 'deposit' ? Math.ceil(total * (pay().pct || 50) / 100) : 0;
+    function payRule() {
+      if (pay().mode === 'none') return '';
+      const what = pay().mode === 'full' ? 'תשלום מלא' : `מקדמה של ${pay().pct || 50}%`;
+      const t = subtotal() + fee();
+      return `ההזמנה מאושרת רק לאחר ${what}${t ? ` (${money(dueFor(t))})` : ''} ב${pay().paybox ? 'ביט או בפייבוקס' : 'ביט'}, תוך ${pay().hours || 24} שעות מהשליחה.`;
+    }
     function bar() {
       let b = $('.bar');
       if (!b) { document.body.insertAdjacentHTML('beforeend', '<div class="bar"><div class="in"><div class="total" id="tot"></div><button class="btn" id="send">שליחת הזמנה</button></div></div>'); b = $('.bar'); }
       const n = lines().reduce((s, l) => s + l.q, 0), f = fee();
-      $('#tot').innerHTML = `<b>${money(subtotal() + f)}</b><span>${n ? n + ' פריטים' + (f ? ' · כולל משלוח' : '') : 'הסל ריק'}${cfg.minOrder && subtotal() < cfg.minOrder ? ` · מינימום ${money(cfg.minOrder)}` : ''}</span>`;
+      const due = dueFor(subtotal() + f);
+      $('#tot').innerHTML = `<b>${money(subtotal() + f)}</b><span>${n ? n + ' פריטים' + (f ? ' · כולל משלוח' : '') : 'הסל ריק'}${cfg.minOrder && subtotal() < cfg.minOrder ? ` · מינימום ${money(cfg.minOrder)}` : ''}${n && due && pay().mode === 'deposit' ? ` · מקדמה ${money(due)}` : ''}</span>`;
+      const pn = $('.paybox-note'); if (pn) pn.textContent = '💳 ' + payRule();
       $('#send').disabled = !n || sending;
     }
     const keep = () => { ['f_n', 'f_p', 'f_a', 'f_al', 'f_no'].forEach(id => { const e = $('#' + id); if (e) keepVals[id] = e.value; }); const t = $('#f_terms'); if (t) keepVals.terms = t.checked; };
@@ -253,20 +268,40 @@
       const ls = lines(), f = fee(), d = parse(order.date);
       const when = `יום ${DAYS[d.getDay()]} ${fmtD(order.date)}${order.time ? ' בשעה ' + order.time : ''}`;
       const text = `היי! שלחתי הזמנה #${res.ref} בטופס 🤎\n` + ls.map(l => `• ${l.q} × ${l.p.name}${l.opt ? ' (' + l.opt + ')' : ''}`).join('\n') +
-        `\n${when} · ${order.method === 'delivery' ? 'משלוח ל' + order.address : 'איסוף עצמי'}\nסה״כ: ${money(+res.total)}\n${order.name}`;
+        `\n${when} · ${order.method === 'delivery' ? 'משלוח ל' + order.address : 'איסוף עצמי'}\nסה״כ: ${money(+res.total)}${+res.due > 0 ? `\nלתשלום לאישור: ${money(+res.due)}` : ''}\n${order.name}`;
       $('.bar') && $('.bar').remove();
+      const needPay = +res.due > 0;
+      const payHtml = needPay ? `<div class="pay-step">
+          <div class="due">${money(+res.due)}</div>
+          <p class="note">${pay().mode === 'full' ? 'תשלום מלא' : 'מקדמה'} לאישור ההזמנה, תוך ${pay().hours || 24} שעות. בהעברה כתבי: הזמנה #${esc(res.ref)}</p>
+          ${pay().bit ? `<div class="pay-opt"><div><b>ביט</b><div class="note" dir="ltr" style="text-align:right">${esc(pay().bit)}</div></div><button class="btn ghost" data-copy="${esc(pay().bit.replace(/\D/g, ''))}">העתקת המספר</button></div>` : ''}
+          ${pay().paybox ? `<div class="pay-opt"><div><b>פייבוקס</b><div class="note">תשלום בקישור</div></div><a class="btn ghost" href="${esc(pay().paybox)}" target="_blank" rel="noopener">לתשלום בפייבוקס</a></div>` : ''}
+          <div id="claimBox" style="margin-top:14px"><div class="note" style="margin-bottom:8px">אחרי שהעברת — לחצי כאן:</div>
+            <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">${pay().bit ? '<button class="btn" data-claim="ביט">שילמתי בביט ✓</button>' : ''}${pay().paybox ? '<button class="btn" data-claim="פייבוקס">שילמתי בפייבוקס ✓</button>' : ''}</div></div>
+        </div>` : '';
       app.innerHTML = `<div class="card done">
-        <div class="ic">✓</div>
-        <h1 style="margin-top:12px">תודה ${esc(order.name.split(' ')[0])}! ההזמנה התקבלה</h1>
-        <p class="note">מספר הזמנה <b>#${esc(res.ref)}</b> · ${when}</p>
+        <div class="ic" style="${needPay ? 'background:var(--sand);color:var(--brown)' : ''}">${needPay ? '₪' : '✓'}</div>
+        <h1 style="margin-top:12px">${needPay ? `כמעט סיימנו, ${esc(order.name.split(' ')[0])}!` : `תודה ${esc(order.name.split(' ')[0])}! ההזמנה התקבלה`}</h1>
+        <p class="note">${needPay ? `הזמנה <b>#${esc(res.ref)}</b> נקלטה ותאושר אחרי התשלום` : `מספר הזמנה <b>#${esc(res.ref)}</b>`} · ${when}</p>
+        ${payHtml}
         <div class="sum">${ls.map(l => `<div><span>${l.q} × ${esc(l.p.name)}${l.opt ? ' (' + esc(l.opt) + ')' : ''}</span><span>${money(l.q * l.p.price)}</span></div>`).join('')}
           ${f ? `<div><span>משלוח</span><span>${money(f)}</span></div>` : ''}<div><span>סה״כ</span><span>${money(+res.total)}</span></div></div>
         ${order.method === 'pickup' && cfg.pickupAddress ? `<p>📍 איסוף מ: <b>${esc(cfg.pickupAddress)}</b></p>` : ''}
-        ${cfg.payInfo ? `<p class="note">💳 ${esc(cfg.payInfo)}</p>` : ''}
-        <p class="note">אחזור אלייך לאישור סופי. אפשר גם לשלוח לי הודעה:</p>
+        ${!needPay && cfg.payInfo ? `<p class="note">💳 ${esc(cfg.payInfo)}</p>` : ''}
+        <p class="note">${needPay ? 'שאלות? אפשר לשלוח לי הודעה:' : 'אחזור אלייך לאישור סופי. אפשר גם לשלוח לי הודעה:'}</p>
         ${cfg.phone ? `<a class="btn wa" href="https://wa.me/${esc(cfg.phone)}?text=${encodeURIComponent(text)}" target="_blank" rel="noopener">שליחת הודעה בוואטסאפ</a>` : ''}
         <div style="margin-top:12px"><button class="btn ghost" onclick="location.reload()">הזמנה נוספת</button></div></div>`;
       scrollTo(0, 0);
+      app.onclick = async e => {
+        const c = e.target.closest('[data-copy]');
+        if (c) { try { await navigator.clipboard.writeText(c.dataset.copy); c.textContent = 'הועתק ✓'; } catch (err) { c.textContent = c.dataset.copy; } return; }
+        const b = e.target.closest('[data-claim]'); if (!b) return;
+        b.disabled = true; b.textContent = 'שולחת…';
+        try {
+          const ok = await rpc('form_paid_claim', { p_slug: slug, p_ref: res.ref, p_phone: order.phone, p_method: b.dataset.claim });
+          $('#claimBox').innerHTML = ok ? '<div class="paid-ok">✓ תודה! קיבלתי את העדכון. ההזמנה תאושר ברגע שאוודא שהתשלום נכנס.</div>' : '<div class="err">לא הצלחתי לעדכן. שלחי לי הודעה בוואטסאפ.</div>';
+        } catch (err) { b.disabled = false; b.textContent = 'שילמתי ב' + b.dataset.claim + ' ✓'; $('#claimBox').insertAdjacentHTML('beforeend', '<div class="err">אין חיבור — נסי שוב</div>'); }
+      };
     }
     load();
   })();

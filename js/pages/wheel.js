@@ -5,6 +5,15 @@
   const COLORS = ['#8f603f', '#b8875e', '#a35c46', '#6b7f5e', '#6d4a33', '#c9a77c', '#7d6a5a', '#9a7b4f'];
   const avg = e => U.sum(e.scores) / e.scores.length;
   const entries = () => A.state.wheel.entries.slice().sort((a, b) => a.date.localeCompare(b.date));
+  const todayEntry = () => A.state.wheel.entries.find(e => e.date === U.today());
+  // רצף ימים של צ׳ק־אין (נספר עד היום, או עד אתמול אם היום עוד לא מולא)
+  const streak = () => {
+    const days = new Set(A.state.wheel.entries.map(e => e.date));
+    let d = days.has(U.today()) ? U.today() : U.addDays(U.today(), -1), n = 0;
+    while (days.has(d)) { n++; d = U.addDays(d, -1); }
+    return n;
+  };
+  const avgRange = (from, to) => { const es = A.state.wheel.entries.filter(e => e.date >= from && e.date <= to); return es.length ? U.sum(es, avg) / es.length : null; };
 
   function wheelSvg(areas, cur, cmp) {
     const S = 520, c = S / 2, R = 180, n = areas.length, step = 2 * Math.PI / n;
@@ -31,13 +40,13 @@
     title: 'גלגל החיים',
     render(main) {
       const areas = A.state.wheel.areas, list = entries();
-      A.setActions(`<button class="btn" data-act="new">${A.icon('plus')}בדיקה חדשה</button>`);
+      A.setActions(`<button class="btn" data-act="new">${A.icon(todayEntry() ? 'edit' : 'plus')}${todayEntry() ? 'עדכון הצ׳ק־אין של היום' : 'הצ׳ק־אין של היום'}</button>`);
       if (!list.length) {
         main.innerHTML = `<div class="card cables" style="max-width:760px">
           <h2 style="margin-bottom:10px">גלגל החיים</h2>
           <p>כלי של טוני רובינס לבדיקת איזון: מדרגים כל תחום בחיים מ־1 עד 10, ורואים בעין איפה הגלגל "שטוח". גלגל לא מאוזן לא מתגלגל חלק — גם כשהעסק פורח.</p>
-          <p class="muted">מומלץ למלא פעם בחודש, באותו יום קבוע, בכנות ובלי לשפוט. בכל בדיקה בוחרים תחום אחד וצעד אחד קטן לשבועות הקרובים — וכאן תראי את ההתקדמות לאורך זמן.</p>
-          <button class="btn" data-act="new">${A.icon('wheel')}למלא את הגלגל הראשון</button></div>`;
+          <p class="muted">צ׳ק־אין יומי של דקה: מדרגים, כותבים ניצחון קטן ודבר אחד שמודים עליו. אפשר לחזור ולעדכן במהלך היום — נשמרת רשומה אחת לכל יום, וכאן תראי רצף, ממוצע שבועי וגרף התקדמות.</p>
+          <button class="btn" data-act="new">${A.icon('wheel')}הצ׳ק־אין הראשון שלי</button></div>`;
       } else {
         const cur = list.find(e => e.id === view.sel) || list[list.length - 1];
         const idx = list.indexOf(cur), prev = list[idx - 1];
@@ -47,8 +56,13 @@
         const labels = list.map(e => U.fmtDate(e.date));
         const series = view.area < 0 ? [{ name: 'ממוצע', color: 'var(--brown)', values: list.map(avg), width: 3 }, { name: 'מצב רוח', color: 'var(--caramel)', values: list.map(e => e.mood || null) }]
           : [{ name: areas[view.area], color: COLORS[view.area % 8], values: list.map(e => e.scores[view.area]), width: 3 }];
+        const st = streak(), w1 = avgRange(U.addDays(U.today(), -6), U.today()), w0 = avgRange(U.addDays(U.today(), -13), U.addDays(U.today(), -7));
         main.innerHTML = `
-        ${days > 30 ? `<div class="notice info section">${A.icon('clock')}<div>עברו ${days} ימים מהבדיקה האחרונה — זה זמן טוב לעצור ולמלא שוב.</div></div>` : ''}
+        <div class="grid g3 section">
+          <div class="card kpi"><div class="lbl">${A.icon('flame')}רצף ימים</div><div class="val">${st}</div><div class="sub">${todayEntry() ? 'היום כבר מילאת ✓' : 'עוד לא מילאת היום'}</div></div>
+          <div class="card kpi"><div class="lbl">ממוצע 7 ימים</div><div class="val">${w1 != null ? U.fmt(U.round(w1, 1)) : '—'}</div>${w1 != null && w0 != null ? `<div class="sub">${w1 >= w0 ? '▲' : '▼'} ${U.fmt(U.round(Math.abs(w1 - w0), 1))} מהשבוע הקודם</div>` : ''}</div>
+          <div class="card kpi" style="display:flex;align-items:center;justify-content:center"><button class="btn" data-act="new">${A.icon(todayEntry() ? 'edit' : 'plus')}${todayEntry() ? 'עדכון היום' : 'צ׳ק־אין להיום'}</button></div>
+        </div>
         <div class="wheel-wrap section">
           <div class="card">
             <div class="card-h"><h3>${U.fmtDate(cur.date)}${cur === list[list.length - 1] ? ' · אחרונה' : ''}</h3>
@@ -94,11 +108,12 @@
   };
 
   function edit(x) {
+    if (!x) x = todayEntry();
     const areas = A.state.wheel.areas, last = entries().slice(-1)[0];
     const d = x || { date: U.today(), scores: last ? last.scores.slice() : areas.map(() => 5), notes: {}, wins: '', gratitude: '', focus: '', mood: 7 };
     const hints = Object.fromEntries(A.WHEEL_AREAS.map(a => [a.name, a.hint]));
     A.modal({
-      title: x ? 'עריכת בדיקה' : 'בדיקת גלגל החיים', size: 'wide',
+      title: `צ׳ק־אין · ${x ? U.dayName(x.date) + ' ' + U.fmtDate(x.date) : 'היום'}`, size: 'wide',
       body: `<p class="muted small" style="margin-top:0">דרגי כל תחום מ־1 (רחוק מאוד ממה שאני רוצה) עד 10 (בדיוק כמו שחלמתי). לא מה שנכון "להרגיש" — מה שבאמת.</p>
         <div class="grid g2" style="gap:0 28px">${areas.map((a, i) => `<div class="area-slider">
           <div class="top"><div><b>${U.esc(a)}</b><div class="hint">${U.esc(hints[a] || '')}</div></div><span class="score" id="sc${i}">${d.scores[i]}</span></div>
@@ -123,9 +138,13 @@
             const v = A.formData(w.querySelector('.form-grid'));
             const scores = [...w.querySelectorAll('[data-i]')].map(r => +r.value);
             const notes = {}; w.querySelectorAll('[data-note]').forEach(n => { if (n.value.trim()) notes[n.dataset.note] = n.value.trim(); });
-            const t = x || { id: U.uid() };
-            Object.assign(t, { date: v.date || U.today(), mood: v.mood, wins: v.wins, gratitude: v.gratitude, focus: v.focus, scores, notes, demo: false });
-            if (!x) A.state.wheel.entries.push(t);
+            const date = v.date || U.today();
+            // רשומה אחת ליום: אם כבר יש צ׳ק־אין בתאריך הזה — מעדכנים אותו
+            const sameDay = A.state.wheel.entries.find(e => e.date === date && e !== x);
+            const t = sameDay || x || { id: U.uid() };
+            Object.assign(t, { date, mood: v.mood, wins: v.wins, gratitude: v.gratitude, focus: v.focus, scores, notes, demo: false });
+            if (sameDay && x) A.state.wheel.entries = A.state.wheel.entries.filter(e => e !== x);
+            if (!sameDay && !x) A.state.wheel.entries.push(t);
             view.sel = t.id; A.closeModal(); A.commit('הגלגל נשמר 🤎');
           }
           if (e.target.closest('[data-del]')) {

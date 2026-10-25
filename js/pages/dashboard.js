@@ -18,6 +18,10 @@
 
       // התראות
       const alerts = [];
+      const claimed = A.state.orders.filter(o => o.payClaim && o.payDue > 0 && (+o.paid || 0) < o.payDue - 0.01 && o.status !== 'cancelled');
+      if (claimed.length) alerts.push(['wallet', `${claimed.length === 1 ? 'לקוחה דיווחה' : claimed.length + ' לקוחות דיווחו'} על תשלום — לבדוק ולאשר`, 'orders']);
+      const overdue = A.state.orders.filter(o => A.payOverdue && A.payOverdue(o));
+      if (overdue.length) alerts.push(['alert', `${overdue.length === 1 ? 'הזמנה אחת לא שולמה' : overdue.length + ' הזמנות לא שולמו'} בזמן — לבטל או לשלוח תזכורת`, 'orders']);
       const fresh = A.state.orders.filter(o => o.status === 'new');
       if (fresh.length) alerts.push(['orders', `${fresh.length === 1 ? 'הזמנה חדשה מחכה' : fresh.length + ' הזמנות חדשות מחכות'} לאישור שלך`, 'orders']);
       const late = open.filter(o => o.date < today);
@@ -34,7 +38,7 @@
       if (!synced && A.state.orders.length + A.state.recipes.length > 0) alerts.push(['cloud', 'הנתונים שמורים רק במכשיר הזה — כדאי להפעיל סנכרון', 'settings']);
       if (!s.lastBackup || U.diffDays(today, s.lastBackup) > (synced ? 30 : 7)) alerts.push(['download', s.lastBackup ? `עברו ${U.diffDays(today, s.lastBackup)} ימים מהגיבוי האחרון` : 'עוד לא בוצע גיבוי לנתונים', 'settings']);
       const lastWheel = A.state.wheel.entries.map(e => e.date).sort().pop();
-      if (!lastWheel || U.diffDays(today, lastWheel) > 30) alerts.push(['wheel', lastWheel ? 'הגיע הזמן לבדיקת גלגל החיים החודשית' : 'עוד לא מילאת את גלגל החיים', 'wheel']);
+      if (lastWheel !== today) alerts.push(['wheel', 'הצ׳ק־אין היומי בגלגל החיים מחכה לך (דקה אחת)', 'wheel']);
 
       const first = !A.state.orders.length && !s.welcomeDone;
       const goal = +s.monthlyGoal || 0;
@@ -43,7 +47,7 @@
         <h2 style="margin-bottom:8px">ברוכה הבאה למערכת של על הגשר 🤎</h2>
         <p style="margin:0 0 14px;opacity:.9">כבר מחכים לך ${A.state.recipes.filter(r => r.library).length} מתכוני בסיס מדויקים בגרמים, מחסן עם ${A.state.ingredients.length} מצרכים ומחירים משוערים, ותמחור אוטומטי לכל מתכון. שלושה צעדים לפתיחה:</p>
         <ol style="margin:0 0 14px;padding-inline-start:20px;line-height:1.9;opacity:.95"><li>בהגדרות: השכר השעתי שלך ויעד הרווח</li><li>במחסן: עדכון מחירי המצרכים לפי הקבלות</li><li>בטופס ההזמנות: יצירת קישור קבוע ללקוחות</li></ol>
-        <div class="row"><a class="btn soft" href="#/settings">להתחיל בהגדרות</a><a class="btn ghost" href="#/recipes">למתכונים</a><button class="btn ghost" data-act="demo">לנסות עם נתוני דוגמה</button><button class="btn ghost" data-act="dismiss">${A.icon('x')}הבנתי</button></div></div>` : ''}
+        <div class="row"><a class="btn soft" href="#/settings">להתחיל בהגדרות</a><a class="btn ghost" href="#/recipes">למתכונים</a><button class="btn ghost" data-act="dismiss">${A.icon('x')}הבנתי</button></div></div>` : ''}
       <div class="grid g4 section">
         <div class="card kpi"><div class="lbl">${A.icon('orders')}להיום</div><div class="val">${todayO.length}</div><div class="sub">${tmrO.length} מחר · ${weekO.length} בהמשך השבוע</div></div>
         <div class="card kpi"><div class="lbl">${A.icon('calendar')}7 הימים הקרובים</div><div class="val">${U.money(weekRev, 0)}</div><div class="sub">הכנסות צפויות</div></div>
@@ -78,7 +82,6 @@
         if (b.dataset.act === 'newOrder') A.editOrder();
         if (b.dataset.act === 'newRecipe') A.editRecipe();
         if (b.dataset.act === 'dismiss') { s.welcomeDone = true; A.commit(); return; }
-        if (b.dataset.act === 'demo') { A.seed.demo(A.state); A.commit('נתוני הדוגמה נטענו — אפשר למחוק אותם בהגדרות'); }
       };
       main.onclick = act;
       document.getElementById('topActions').onclick = act;

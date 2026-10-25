@@ -48,7 +48,7 @@
       else {
         const groups = U.groupBy(list, o => o.date);
         main.innerHTML = head + `
-        <div class="seg section" style="display:flex">${[['upcoming', 'פתוחות'], ['today', `היום (${counts.today})`], ['week', 'השבוע'], ['unpaid', `לא שולמו (${counts.unpaid})`], ['done', 'נמסרו'], ['cancelled', 'בוטלו'], ['all', 'הכל']].map(([v, l]) => `<button data-filter="${v}" class="${view.filter === v ? 'on' : ''}">${l}</button>`).join('')}</div>
+        <div class="seg section scroll" style="display:flex">${[['upcoming', 'פתוחות'], ['today', `היום (${counts.today})`], ['week', 'השבוע'], ['unpaid', `לא שולמו (${counts.unpaid})`], ['done', 'נמסרו'], ['cancelled', 'בוטלו'], ['all', 'הכל']].map(([v, l]) => `<button data-filter="${v}" class="${view.filter === v ? 'on' : ''}">${l}</button>`).join('')}</div>
         <div class="card">${list.length ? Object.keys(groups).map(d => `<div class="small muted" style="padding:10px 4px 2px;font-weight:700">${U.relDay(d)} · ${U.dayName(d)} ${U.fmtDate(d)} · ${groups[d].length} הזמנות · ${U.money(U.sum(groups[d].filter(o => o.status !== 'cancelled'), o => C.orderTotals(o).total))}</div>${groups[d].map(A.orderRow).join('')}`).join('')
             : `<div class="empty"><h3>אין הזמנות כאן</h3><p>${A.state.orders.length ? 'נסי מסנן אחר' : 'כשתיכנס הזמנה, היא תופיע כאן.'}</p><button class="btn" data-act="new">${A.icon('plus')}הזמנה חדשה</button></div>`}</div>`;
       }
@@ -109,6 +109,7 @@
           <div><div class="muted small">טלפון</div><b dir="ltr">${U.esc(o.phone || '—')}</b></div>
           <div><div class="muted small">אמצעי תשלום</div><b>${U.esc(o.payMethod || '—')}</b></div>
         </div>
+        ${payNotice(o, t)}
         ${o.allergies ? `<div class="notice section">${A.icon('alert')}<div><b>רגישויות:</b> ${U.esc(o.allergies)}</div></div>` : ''}
         <table class="section"><thead><tr><th>מוצר</th><th class="n">כמות</th><th class="n">מחיר</th><th class="n">סה״כ</th></tr></thead><tbody>
           ${o.items.map(i => `<tr><td>${i.recipeId ? `<a href="#/recipe/${i.recipeId}" data-close>${U.esc(i.name)}</a>` : U.esc(i.name)}</td><td class="n">${U.fmt(i.qty)}</td><td class="n">${U.money(i.unitPrice)}</td><td class="n">${U.money(i.qty * i.unitPrice)}</td></tr>`).join('')}
@@ -130,6 +131,7 @@
         w.addEventListener('click', async e => {
           const b = e.target.closest('button'); if (!b) return;
           if (b.dataset.status) { o.status = b.dataset.status; if (o.status === 'delivered' && C.orderTotals(o).balance > 0) A.toast('שימי לב: נשארה יתרה לתשלום'); A.save(); A.refresh(); A.openOrder(o.id); }
+          else if ('approvepay' in b.dataset) { o.paid = Math.max(+o.paid || 0, o.payDue); if (o.status === 'new') o.status = 'confirmed'; A.save(); A.refresh(); A.openOrder(o.id); A.toast('התשלום אושר וההזמנה מאושרת — שלחי לה אישור בוואטסאפ'); }
           else if ('paid' in b.dataset) { o.paid = C.orderTotals(o).total; A.save(); A.refresh(); A.openOrder(o.id); A.toast('התשלום נרשם'); }
           else if ('edit' in b.dataset) A.editOrder(o);
           else if ('dup' in b.dataset) { const c = U.clone(o); Object.assign(c, { id: U.uid(), num: s.nextOrderNum++, status: 'new', paid: 0, demo: false, date: U.addDays(U.today(), 1), createdAt: U.today() }); A.state.orders.push(c); A.save(); A.editOrder(c); }
@@ -139,6 +141,20 @@
       }
     });
   };
+
+  A.payOverdue = o => {
+    const hrs = +((A.state.form || {}).pay || {}).hours || 24;
+    return o.payDue > 0 && (+o.paid || 0) < o.payDue - 0.01 && !o.payClaim && o.status !== 'cancelled' && o.createdTs && (Date.now() - new Date(o.createdTs)) / 36e5 > hrs;
+  };
+  function payNotice(o, t) {
+    if (!(o.payDue > 0) || t.paid >= o.payDue - 0.01 || o.status === 'cancelled') return '';
+    const kind = o.payMode === 'full' ? 'תשלום מלא' : 'מקדמה';
+    const ago = o.createdTs ? Math.max(0, Math.round((Date.now() - new Date(o.createdTs)) / 36e5)) : null;
+    if (o.payClaim) return `<div class="notice info section">${A.icon('wallet')}<div><b>הלקוחה דיווחה ששילמה ${U.money(o.payDue)} ב${U.esc(o.payClaim.method || 'העברה')}.</b> בדקי באפליקציה שהכסף נכנס, ואז אשרי.
+      <div style="margin-top:8px"><button class="btn sm" data-approvepay>${A.icon('check')}התשלום התקבל — אישור ההזמנה</button></div></div></div>`;
+    return `<div class="notice section">${A.icon('wallet')}<div><b>ממתינה ל${kind}: ${U.money(o.payDue)}.</b> ההזמנה לא מאושרת עד שהתשלום מתקבל${ago != null ? ` · נשלחה לפני ${ago} שעות` : ''}${A.payOverdue(o) ? ' · <b>עבר הזמן לתשלום</b> — אפשר לבטל או לשלוח תזכורת' : ''}.
+      <div style="margin-top:8px"><button class="btn sm" data-approvepay>${A.icon('check')}התשלום התקבל — אישור ההזמנה</button></div></div></div>`;
+  }
 
   function waTemplates(o, t) {
     const biz = A.state.settings.businessName || 'על הגשר';
@@ -150,7 +166,7 @@
     return [
       { label: 'אישור הזמנה', text: `היי ${first}, תודה שהזמנת מ${biz}! 🤎 ההזמנה מאושרת.\n${items}\nמועד: ${when} (${o.method === 'delivery' ? 'משלוח' : 'איסוף'})${o.method !== 'delivery' && pickup ? `\nכתובת לאיסוף: ${pickup}` : ''}\nסה״כ: ${U.money(t.total)}${t.paid ? `\nשולם: ${U.money(t.paid)}` : ''}${pay && t.balance ? `\n${pay}` : ''}\nמחכה לאפות בשבילך!` },
       { label: 'ההזמנה מוכנה', text: `היי ${first}, ההזמנה שלך מ${biz} מוכנה ${o.method === 'delivery' ? 'ויוצאת אלייך' : 'לאיסוף'} 🥐${t.balance ? `\nיתרה לתשלום: ${U.money(t.balance)}` : ''}` },
-      { label: 'תזכורת תשלום', text: `היי ${first}, תזכורת עדינה — נשארה יתרה של ${U.money(t.balance)} על הזמנה #${o.num}. אפשר בביט/פייבוקס. תודה! 🤎` },
+      { label: 'תזכורת תשלום', text: o.payDue > 0 && t.paid < o.payDue ? `היי ${first}, כדי לאשר את הזמנה #${o.num} חסר${o.payMode === 'full' ? ' התשלום' : 'ה המקדמה'} של ${U.money(o.payDue - t.paid)}.${(A.state.form.pay || {}).bit || A.state.settings.phone ? ` ביט: ${(A.state.form.pay || {}).bit || A.state.settings.phone}` : ''}${(A.state.form.pay || {}).paybox ? `\nפייבוקס: ${A.state.form.pay.paybox}` : ''}\nתודה! 🤎` : `היי ${first}, תזכורת עדינה — נשארה יתרה של ${U.money(t.balance)} על הזמנה #${o.num}. אפשר בביט/פייבוקס. תודה! 🤎` },
       { label: 'בקשת חוות דעת', text: `היי ${first}, מקווה שנהניתם! 🤎 אשמח לשמוע איך היה — ואם אהבת, תמונה או המלצה קטנה עוזרות לי מאוד.` }
     ].filter(m => m.label !== 'תזכורת תשלום' || t.balance > 0);
   }

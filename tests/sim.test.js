@@ -2,7 +2,7 @@
 const fs = require('fs'), path = require('path'), vm = require('vm'), assert = require('assert');
 const ctx = { console, Intl, TextEncoder, TextDecoder, btoa: s => Buffer.from(s, 'binary').toString('base64'), atob: s => Buffer.from(s, 'base64').toString('binary') };
 ctx.window = ctx; vm.createContext(ctx);
-['js/core.js', 'js/seed.js', 'js/library.js', 'js/sync.js', 'js/pages/production.js'].forEach(f => vm.runInContext(fs.readFileSync(path.join(__dirname, '..', f), 'utf8'), ctx, { filename: f }));
+['js/core.js', 'js/seed.js', 'js/library.js', 'js/sync.js', 'js/pages/production.js', 'tests/demo-fixture.js'].forEach(f => vm.runInContext(fs.readFileSync(path.join(__dirname, '..', f), 'utf8'), ctx, { filename: f }));
 const A = ctx.App, U = A.util, C = A.calc;
 let n = 0; const t = (name, fn) => { fn(); n++; console.log('✓', name); };
 const near = (a, b, eps = 0.01, msg) => assert.ok(Math.abs(a - b) <= eps, `${msg || ''} expected ${b}, got ${a}`);
@@ -230,6 +230,24 @@ t('לוח זמנים לאפייה מחושב אחורה', () => {
   assert.ok(cream && cream.ready.getTime() === tart.start.getTime(), 'הקרם מוכן כשמתחילים את הטארט');
   const ch = tasks.find(t => t.recipe.id === 'lib-challah'); assert.strictEqual(ch.batches, 2, '4 חלות = 2 מנות (3 בכל מנה)');
   for (let i = 1; i < tasks.length; i++) assert.ok(tasks[i - 1].start <= tasks[i].start, 'ממוין לפי שעת התחלה');
+  A.state = save;
+});
+t('מצב תשלום להזמנה מהטופס (מקדמה / דיווח / אושר)', () => {
+  const o = { items: [{ name: 'x', qty: 1, unitPrice: 100 }], method: 'pickup', paid: 0, payDue: 50, payMode: 'deposit', status: 'new' };
+  assert.strictEqual(A.calc.payState(o).label, 'ממתינה לתשלום');
+  o.payClaim = { method: 'ביט', at: new Date().toISOString() }; assert.strictEqual(A.calc.payState(o).label, 'דיווחה ששילמה');
+  o.paid = 50; assert.strictEqual(A.calc.payState(o).label, 'מקדמה');
+  o.paid = 100; assert.strictEqual(A.calc.payState(o).label, 'שולם');
+  const p = { items: [{ name: 'x', qty: 1, unitPrice: 100 }], paid: 0, status: 'new' }; assert.strictEqual(A.calc.payState(p).label, 'לא שולם');
+});
+
+t('ניקוי אוטומטי של נתוני דוגמה ישנים', () => {
+  const st = A.normalize(null); A.seed.catalog(st); const save = A.state; A.state = st; A.seed.library(st);
+  A.seed.demo(st); assert.ok(A.seed.hasDemo(st));
+  st.orders.push({ id: 'mine', num: 5000, date: U.today(), status: 'new', items: [{ recipeId: 'lib-challah', name: 'חלה', qty: 1, unitPrice: 28 }] });
+  A.seed.clearDemo(st);
+  assert.ok(!A.seed.hasDemo(st)); assert.strictEqual(st.orders.length, 1); assert.strictEqual(st.recipes.filter(r => r.library).length, 25);
+  assert.strictEqual(st.orders[0].items[0].recipeId, 'lib-challah', 'הזמנה אמיתית נשארת מקושרת');
   A.state = save;
 });
 console.log(`\n${n} בדיקות עברו`);

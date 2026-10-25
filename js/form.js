@@ -17,6 +17,7 @@
   const thumbs = {};
   const thumb = src => {
     if (!src) return Promise.resolve('');
+    if (!src.startsWith('data:')) return Promise.resolve(new URL(src, A.PUBLIC_BASE).href); // תמונה קבועה מהאתר — קישור במקום העתקה
     const k = src.length + ':' + src.slice(-40);
     if (thumbs[k]) return Promise.resolve(thumbs[k]);
     return new Promise(res => {
@@ -53,6 +54,7 @@
       v: 1, bizName: s.businessName, phone: U.phoneIntl(s.phone), open: !!f.open, closedMsg: f.closedMsg, title: f.title, intro: f.intro,
       pickupAddress: f.pickupAddress, payInfo: f.payInfo, terms: f.terms, leadDays: +f.leadDays || 0, maxDaysAhead: +f.maxDaysAhead || 30,
       capacity: +f.capacity || 0, slotMinutes: +f.slotMinutes || 0, minOrder: +f.minOrder || 0, blocked: f.blocked.filter(d => d >= t),
+      pay: { mode: f.pay.mode, pct: +f.pay.pct || 50, bit: f.pay.bit || s.phone || '', paybox: f.pay.paybox || '', hours: +f.pay.hours || 24 },
       days: f.days, delivery: { on: !!f.delivery.on, fee: +f.delivery.fee || 0, freeAbove: +f.delivery.freeAbove || 0, note: f.delivery.note || '' },
       products, load: F.load()
     };
@@ -84,10 +86,13 @@
     try {
       const rows = await rpc('form_inbox', { p_key: f.key, p_slug: f.slug });
       if (!rows.length) return 0;
-      const added = [];
+      const added = [], claims = [];
       rows.forEach(row => {
         const id = 'form-' + row.id;
-        if (A.state.orders.some(o => o.id === id)) return;
+        const existing = A.state.orders.find(o => o.id === id);
+        const claim = row.paid_claim ? { method: row.paid_claim.method || '', at: row.paid_claim.at } : null;
+        if (existing) { if (claim && (!existing.payClaim || existing.payClaim.at !== claim.at)) { existing.payClaim = claim; claims.push(existing); } return; }
+        if (!row.is_new) return;
         const p = row.payload;
         const itemNotes = p.items.filter(i => i.note).map(i => `${i.name}: ${i.note}`);
         const o = {
@@ -95,20 +100,23 @@
           method: p.method, address: p.address || '', deliveryFee: +p.deliveryFee || 0, discount: 0, paid: 0, payMethod: '',
           items: p.items.map(i => ({ recipeId: C.recipe(i.id) ? i.id : null, name: i.name + (i.option ? ` (${i.option})` : ''), qty: +i.qty, unitPrice: +i.price })),
           source: 'טופס הזמנה', notes: [p.notes, ...itemNotes].filter(Boolean).join(' · '), allergies: p.allergies || '', status: 'new',
-          createdAt: (row.created_at || '').slice(0, 10) || U.today()
+          createdAt: (row.created_at || '').slice(0, 10) || U.today(), createdTs: row.created_at || '',
+          payMode: p.payMode || 'none', payDue: +p.amountDue || 0, payClaim: claim
         };
         A.state.orders.push(o); added.push(o);
       });
-      if (added.length) { await A.saveNow(); }
-      await rpc('form_ack', { p_key: f.key, p_slug: f.slug, p_ids: rows.map(r => r.id) });
+      if (added.length || claims.length) { await A.saveNow(); }
+      await rpc('form_ack', { p_key: f.key, p_slug: f.slug, p_ids: rows.map(r => r.id), p_before: rows[0].fetched_at });
       if (added.length) notify(added);
+      if (claims.length) notify(claims, true);
       return added.length;
     } catch (e) { console.warn('form poll', e); return 0; }
     finally { polling = false; }
   };
-  function notify(orders) {
+  function notify(orders, claim) {
     const o = orders[0];
-    const msg = orders.length === 1 ? `הזמנה חדשה מ${o.customerName} ל${U.relDay(o.date)} · ${U.money(C.orderTotals(o).total)}` : `${orders.length} הזמנות חדשות מהטופס`;
+    const msg = claim ? `${o.customerName} דיווחה ששילמה ב${o.payClaim.method || 'העברה'} — בדקי ואשרי את ההזמנה`
+      : orders.length === 1 ? `הזמנה חדשה מ${o.customerName} ל${U.relDay(o.date)} · ${U.money(C.orderTotals(o).total)}` : `${orders.length} הזמנות חדשות מהטופס`;
     A.toast('🛎️ ' + msg);
     try { const ctx = new (root.AudioContext || root.webkitAudioContext)(); [0, .18].forEach((t, i) => { const os = ctx.createOscillator(), g = ctx.createGain(); os.frequency.value = i ? 1046 : 784; os.connect(g); g.connect(ctx.destination); g.gain.setValueAtTime(.2, ctx.currentTime + t); g.gain.exponentialRampToValueAtTime(.001, ctx.currentTime + t + .35); os.start(ctx.currentTime + t); os.stop(ctx.currentTime + t + .4); }); } catch (e) { }
     try { if (root.Notification && Notification.permission === 'granted') new Notification('על הגשר', { body: msg, icon: 'assets/icon.png' }); } catch (e) { }
@@ -229,6 +237,17 @@
           <label class="field"><span>מינימום הזמנה (₪)</span><input type="number" min="0" data-p="minOrder" data-num="1" value="${f.minOrder}"></label>
           <label class="field full"><span>אזורי משלוח / הערה</span>${inp('delivery.note', f.delivery.note, `placeholder="למשל: משלוחים בתוך העיר בלבד" ${f.delivery.on ? '' : 'disabled'}`)}</label>
         </div></div>
+
+      <div class="card section"><div class="card-h"><h3>${A.icon('wallet')}תשלום לאישור ההזמנה</h3></div>
+        <div class="form-grid c4">
+          <label class="field"><span>מה נדרש כדי לאשר</span><select data-p="pay.mode">${A.opts([['deposit', 'מקדמה'], ['full', 'תשלום מלא'], ['none', 'בלי תשלום מראש']], f.pay.mode)}</select></label>
+          ${f.pay.mode === 'deposit' ? `<label class="field"><span>גובה המקדמה (%)</span><input type="number" min="10" max="100" step="5" data-p="pay.pct" data-num="1" value="${f.pay.pct}"></label>` : ''}
+          ${f.pay.mode !== 'none' ? `<label class="field"><span>תוך כמה שעות לשלם</span><input type="number" min="1" max="168" data-p="pay.hours" data-num="1" value="${f.pay.hours}"></label>
+          <label class="field"><span>מספר לביט</span><input type="tel" data-p="pay.bit" value="${U.esc(f.pay.bit || '')}" placeholder="${U.esc(s.phone || '050-0000000')}"></label>
+          <label class="field full"><span>קישור לתשלום בפייבוקס</span><input type="url" dir="ltr" data-p="pay.paybox" value="${U.esc(f.pay.paybox || '')}" placeholder="https://payboxapp.page.link/…"><small>יוצרים באפליקציית פייבוקס: "בקשת תשלום" ← "שיתוף קישור". אם ריק — יוצג רק ביט.</small></label>` : ''}
+        </div>
+        <p class="small muted" style="margin:10px 0 0">${f.pay.mode === 'none' ? 'ההזמנות ייכנסו בלי דרישת תשלום.' : 'אחרי שליחת ההזמנה הלקוחה רואה את הסכום לתשלום וכפתורי ביט/פייבוקס, ולוחצת "שילמתי". ההזמנה נשארת "ממתינה לתשלום" עד שאת בודקת שהכסף נכנס ומאשרת — ואז נשלח לה אישור.'}</p>
+      </div>
 
       <div class="card"><div class="card-h"><h3>${A.icon('book')}מוצרים בטופס</h3><span class="small muted">המחיר נלקח מהמתכון אלא אם תכתבי מחיר אחר לטופס</span></div>
         ${recipes.length ? `<div class="table-wrap"><table class="form-products"><thead><tr><th>מוצג</th><th>מוצר</th><th class="n">מחיר</th><th>תיאור קצר</th><th>טעמים / סוגים (בפסיקים)</th><th class="n">מקס׳</th></tr></thead><tbody>

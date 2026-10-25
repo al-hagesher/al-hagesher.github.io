@@ -2,7 +2,7 @@
    כל מתכון ניתן לעריכה מלאה. מזהים קבועים (lib-…) כדי שלא ייווצרו כפילויות בין מכשירים מסונכרנים. */
 (function (root) {
   const A = root.App, U = A.util;
-  const LIB_VERSION = 1;
+  const LIB_VERSION = 2; // 2: תמונות פרופיל למתכוני הבסיס
 
   // מצרכים נוספים לספרייה: [מזהה, שם, קטגוריה, מחיר, גודל, יחידה, גרם לכוס, גרם ליחידה, אלרגנים]
   const EXTRA_INGS = [
@@ -208,7 +208,7 @@
       state.recipes.push({
         id, library: true, name: r.name, category: r.cat, yield: r.y, yieldUnit: r.unit, price: r.price, packagingPerUnit: r.pack, otherCost: 0,
         ovenTemp: r.temp || '', times: { prep: r.t[0], rest: r.t[1], bake: r.t[2], cool: r.t[3], decor: r.t[4] },
-        description: r.desc, steps: r.steps.slice(), notes: r.notes, tags: ['מתכון בסיס'], favorite: false, image: '', created: '',
+        description: r.desc, steps: r.steps.slice(), notes: r.notes, tags: ['מתכון בסיס'], favorite: false, image: `assets/recipes/${r.key}.jpg`, created: '',
         storage: { room: r.storage[0], fridge: r.storage[1], freezer: r.storage[2], note: r.storage[3] },
         ingredients: r.ing.map(([n, qty, unit, section]) => n[0] === '@'
           ? { subId: 'lib-' + n.slice(1), qty, unit: 'batch', section: section || '' }
@@ -216,6 +216,8 @@
       });
       added++;
     });
+    // מתכוני בסיס קיימים בלי תמונה מקבלים את תמונת הפרופיל (לא דורסים תמונה שהעלית)
+    state.recipes.forEach(x => { if (x.library && !x.image && RECIPES.some(r => 'lib-' + r.key === x.id)) { x.image = `assets/recipes/${x.id.slice(4)}.jpg`; added++; } });
     state.settings.libraryVersion = LIB_VERSION;
     return added;
   };

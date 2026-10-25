@@ -230,9 +230,9 @@ tfoot td { font-weight: 700; border-top: 2px solid var(--line-2); }
 .recipe-hero .ph img { width: 100%; height: 100%; object-fit: cover; }
 .cols-main { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); }
 .form-grid.c5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
-@media (max-width: 860px) { .cols-main { grid-template-columns: 1fr; } .form-grid.c5 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 860px) { .cols-main { grid-template-columns: minmax(0, 1fr); } .form-grid.c5 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .recipe-cols { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); }
-@media (max-width: 1180px) { .recipe-cols { grid-template-columns: 1fr; } }
+@media (max-width: 1180px) { .recipe-cols { grid-template-columns: minmax(0, 1fr); } }
 .ing-table td { padding: 8px 6px; }
 .ing-table .q { font-weight: 700; color: var(--brown); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .ing-section td { background: var(--sand-2); font-family: var(--serif); color: var(--brown); font-size: 1rem; padding: 6px 8px; }
@@ -372,7 +372,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: non
 @media (max-width: 1100px) {
   .g4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .g3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .wheel-wrap { grid-template-columns: 1fr; }
+  .wheel-wrap { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 860px) {
   body { font-size: 15px; }
@@ -390,7 +390,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: non
   .sync-top { display: inline-flex; padding: 6px; }
   .sync-top span { display: none; }
   main { padding: 16px 16px 100px; }
-  .g2, .g3, .recipe-hero, .form-grid, .form-grid.c3 { grid-template-columns: 1fr; }
+  .g2, .g3, .recipe-hero, .form-grid, .form-grid.c3 { grid-template-columns: minmax(0, 1fr); }
   .g4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .form-grid.c4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .span2 { grid-column: auto; }
@@ -415,6 +415,9 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: non
   .timers { bottom: 80px; }
   .m-body { padding: 16px; }
   .hide-m { display: none !important; }
+  .seg.scroll { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  .seg.scroll::-webkit-scrollbar { display: none; }
+  .seg.scroll button { flex: none; white-space: nowrap; }
 }
 .cal .d .cnt { display: none; font-size: .72rem; color: var(--brown); font-weight: 700; }
 .scrim { display: none; }

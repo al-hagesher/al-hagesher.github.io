@@ -127,6 +127,7 @@
     leadDays: 2, maxDaysAhead: 30, capacity: 0, slotMinutes: 30, minOrder: 0, blocked: [],
     days: { 0: { on: false, from: '09:00', to: '18:00' }, 1: { on: false, from: '09:00', to: '18:00' }, 2: { on: false, from: '09:00', to: '18:00' }, 3: { on: false, from: '09:00', to: '18:00' }, 4: { on: true, from: '10:00', to: '19:00' }, 5: { on: true, from: '08:00', to: '13:00' }, 6: { on: false, from: '20:00', to: '22:00' } },
     delivery: { on: false, fee: 20, freeAbove: 0, note: '' },
+    pay: { mode: 'deposit', pct: 50, bit: '', paybox: '', hours: 24 },
     products: {}
   });
 
@@ -178,6 +179,7 @@
     s.form = Object.assign(fd, s.form || {});
     s.form.days = Object.assign(fd.days, (s.form && s.form.days) || {});
     s.form.delivery = Object.assign(A.formDefaults().delivery, s.form.delivery || {});
+    s.form.pay = Object.assign(A.formDefaults().pay, s.form.pay || {});
     if (!Array.isArray(s.form.blocked)) s.form.blocked = [];
     if (!s.form.products || typeof s.form.products !== 'object') s.form.products = {};
     return s;
@@ -189,6 +191,7 @@
     A.state = A.normalize(s);
     if (!A.state.seeded && A.seed) { A.seed.catalog(A.state); A.state.seeded = true; A.saveNow(); }
     if (A.seed && A.seed.library && A.seed.library(A.state)) A.saveNow();
+    if (A.seed && A.seed.hasDemo && A.seed.hasDemo(A.state)) { A.seed.clearDemo(A.state); A.saveNow(); } // ניקוי נתוני דוגמה מגרסאות קודמות
     return A.state;
   };
   A.saveNow = async () => {
@@ -307,6 +310,7 @@
   };
   C.payState = o => {
     const t = C.orderTotals(o);
+    if (o.payDue > 0 && t.paid < o.payDue - 0.01 && o.status !== 'cancelled') return o.payClaim ? { label: 'דיווחה ששילמה', cls: 'info' } : { label: 'ממתינה לתשלום', cls: 'warn' };
     if (t.total > 0 && t.paid >= t.total - 0.01) return { label: 'שולם', cls: 'ok' };
     if (t.paid > 0) return { label: 'מקדמה', cls: 'warn' };
     return { label: 'לא שולם', cls: 'bad' };

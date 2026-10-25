@@ -31,7 +31,7 @@
           <div class="search">${A.icon('search')}<input type="search" placeholder="חיפוש מתכון, תגית…" value="${U.esc(view.q)}" data-f="q"></div>
           <select data-f="sort" style="width:auto">${A.opts([['name', 'לפי שם'], ['margin', 'לפי רווחיות'], ['time', 'לפי זמן'], ['sold', 'הכי נמכרים']], view.sort)}</select>
         </div>
-        <div class="seg section" style="display:flex">${cats.map(c => `<button data-cat="${U.esc(c)}" class="${view.cat === c ? 'on' : ''}">${U.esc(c)}</button>`).join('')}</div>
+        <div class="seg section scroll" style="display:flex">${cats.map(c => `<button data-cat="${U.esc(c)}" class="${view.cat === c ? 'on' : ''}">${U.esc(c)}</button>`).join('')}</div>
         ${list.length ? `<div class="recipe-grid">${list.map(({ r, p }) => `
           <div class="card recipe-card" data-open="${r.id}">
             <div class="ph">${thumb(r)}<button class="icon-btn fav ${r.favorite ? 'on' : ''}" data-fav="${r.id}" aria-label="מועדף">${A.icon('star')}</button></div>

@@ -1,5 +1,5 @@
 /* על הגשר — עבודה גם בלי אינטרנט (כשהאפליקציה מותקנת מכתובת אינטרנט) */
-const CACHE = 'al-hagesher-202610252037';
+const CACHE = 'al-hagesher-202610252039';
 const FILES = ['./', 'index.html', 'order.html', 'css/style.css', 'assets/logo.png', 'assets/icon.png', 'manifest.webmanifest',
   'js/theme.js', 'js/order.js', 'js/core.js', 'js/seed.js', 'js/library.js', 'js/ui.js', 'js/sync.js', 'js/form.js', 'js/app.js', 'js/pages/dashboard.js', 'js/pages/recipes.js', 'js/pages/pantry.js', 'js/pages/orders.js',
   'js/pages/production.js', 'js/pages/customers.js', 'js/pages/expenses.js', 'js/pages/stats.js', 'js/pages/wheel.js', 'js/pages/tools.js', 'js/pages/settings.js'];

@@ -36,7 +36,7 @@
           <div class="card recipe-card" data-open="${r.id}">
             <div class="ph">${thumb(r)}<button class="icon-btn fav ${r.favorite ? 'on' : ''}" data-fav="${r.id}" aria-label="מועדף">${A.icon('star')}</button></div>
             <div class="body">
-              <div class="row between"><h3>${U.esc(r.name)}</h3></div>
+              <div class="row between"><h3>${U.esc(r.name)}</h3>${(r.tags || []).includes('בניסוי') ? '<span class="badge warn">בניסוי</span>' : ''}</div>
               <div class="meta"><span>${A.icon('clock')}${U.minutes(p.times.total)}</span><span>${U.fmt(r.yield)} ${U.esc(r.yieldUnit || 'יח׳')}</span><span>${U.esc(r.category || '')}</span></div>
               <div class="row between" style="margin-top:auto;padding-top:6px">
                 <span class="small">עלות ${U.money(p.perUnit)} · מחיר <b>${p.price ? U.money(p.price) : '—'}</b></span>

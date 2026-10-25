@@ -54,7 +54,7 @@
       v: 1, bizName: s.businessName, phone: U.phoneIntl(s.phone), open: !!f.open, closedMsg: f.closedMsg, title: f.title, intro: f.intro,
       pickupAddress: f.pickupAddress, payInfo: f.payInfo, terms: f.terms, leadDays: +f.leadDays || 0, maxDaysAhead: +f.maxDaysAhead || 30,
       capacity: +f.capacity || 0, slotMinutes: +f.slotMinutes || 0, minOrder: +f.minOrder || 0, blocked: f.blocked.filter(d => d >= t),
-      pay: { mode: f.pay.mode, pct: +f.pay.pct || 50, bit: f.pay.bit || s.phone || '', paybox: f.pay.paybox || '', hours: +f.pay.hours || 24 },
+      pay: { mode: f.pay.mode, pct: +f.pay.pct || 50, bit: f.pay.bit || s.phone || '', paybox: A.safeUrl(f.pay.paybox), hours: +f.pay.hours || 24 },
       days: f.days, delivery: { on: !!f.delivery.on, fee: +f.delivery.fee || 0, freeAbove: +f.delivery.freeAbove || 0, note: f.delivery.note || '' },
       products, load: F.load()
     };
@@ -187,7 +187,7 @@
         <div class="card-h"><h3>${A.icon('link')}הקישור הקבוע שלך</h3><span data-form-status class="sync-pill"></span></div>
         <div class="grid g2" style="align-items:start">
           <div class="stack">
-            <input readonly dir="ltr" value="${U.esc(link)}" onclick="this.select()">
+            <input readonly dir="ltr" value="${U.esc(link)}" data-selectall aria-label="הקישור לטופס">
             <div class="row"><button class="btn sm" data-act="copy">${A.icon('copy')}העתקה</button>
               <a class="btn sm wa" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent(shareText)}">${A.icon('msg')}שיתוף בוואטסאפ</a>
               <button class="btn sm ghost" data-act="publish">פרסום עכשיו</button></div>
@@ -266,6 +266,9 @@
         const el = e.target;
         if (el.dataset.p) {
           let v = el.type === 'checkbox' ? el.checked : el.dataset.num || el.type === 'number' ? U.num(el.value) : el.value.trim();
+          if (el.dataset.p === 'pay.paybox' && v && !A.safeUrl(v)) { A.toast('קישור פייבוקס חייב להתחיל ב־https://'); el.value = f.pay.paybox || ''; return; }
+          if (el.type === 'number' && el.min !== '' && v < +el.min) { v = +el.min; el.value = v; }
+          if (el.type === 'number' && el.max !== '' && v > +el.max) { v = +el.max; el.value = v; }
           setPath(el.dataset.p, v); A.save();
           if (el.type === 'checkbox' || el.tagName === 'SELECT') A.refresh();
           return;
@@ -281,6 +284,7 @@
         }
       };
       main.onclick = async e => {
+        if (e.target.matches('[data-selectall]')) { e.target.select(); return; }
         const b = e.target.closest('[data-act],[data-unblock]'); if (!b) return;
         if (b.dataset.unblock) { f.blocked = f.blocked.filter(d => d !== b.dataset.unblock); A.commit(); return; }
         const act = b.dataset.act;

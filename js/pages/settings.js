@@ -153,6 +153,8 @@
   P.pair = {
     title: 'חיבור מכשיר',
     render(main, [code]) {
+      // הקוד הסודי לא נשאר בשורת הכתובת ובהיסטוריה
+      try { history.replaceState(null, '', location.pathname + location.search + '#/pair'); } catch (e) { }
       if (A.sync && A.sync.enabled() && A.sync.cfg().code === code) { main.innerHTML = `<div class="card empty"><h3>המכשיר הזה כבר מחובר ☁️</h3><a class="btn" href="#/">לדף הבית</a></div>`; return; }
       main.innerHTML = `<div class="card empty"><h3>חיבור המכשיר לסנכרון</h3><p>אחרי החיבור, כל הנתונים של על הגשר יופיעו כאן ויתעדכנו אוטומטית.</p><button class="btn" data-go>${A.icon('cloud')}להמשיך</button></div>`;
       main.onclick = e => { if (e.target.closest('[data-go]')) joinDialog(code || ''); };

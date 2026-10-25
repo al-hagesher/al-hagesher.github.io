@@ -194,10 +194,21 @@
     if (A.seed && A.seed.hasDemo && A.seed.hasDemo(A.state)) { A.seed.clearDemo(A.state); A.saveNow(); } // ניקוי נתוני דוגמה מגרסאות קודמות
     return A.state;
   };
+  // כמה לשוניות פתוחות באותו מכשיר: כל שמירה מודיעה לאחרות, והן טוענות את המצב העדכני
+  const TAB = Math.random().toString(36).slice(2);
+  let bc = null; try { bc = new root.BroadcastChannel('al-hagesher'); } catch (e) { }
+  if (bc) bc.onmessage = async ev => {
+    if (!ev.data || ev.data.from === TAB || ev.data.t !== 'saved') return;
+    let s = null; try { s = await idbGet(); } catch (e) { try { s = JSON.parse(root.localStorage.getItem(DB) || 'null'); } catch (e2) { } }
+    if (!s || !A.state) return;
+    if (A.reconcileState) A.reconcileState(A.state, A.normalize(s)); else A.state = A.normalize(s);
+    A.onExternalChange && A.onExternalChange();
+  };
   A.saveNow = async () => {
     const json = JSON.stringify(A.state);
     try { await idbPut(JSON.parse(json)); }
     catch (e) { try { root.localStorage.setItem(DB, json); } catch (e2) { A.onSaveError && A.onSaveError(e2); } }
+    try { bc && bc.postMessage({ t: 'saved', from: TAB }); } catch (e) { }
     (A.saveHooks || []).forEach(f => { try { f(); } catch (e) { console.warn(e); } });
   };
   A.save = U.debounce(A.saveNow, 250);

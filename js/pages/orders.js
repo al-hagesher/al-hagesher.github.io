@@ -132,6 +132,7 @@
           const b = e.target.closest('button'); if (!b) return;
           if (b.dataset.status) { o.status = b.dataset.status; if (o.status === 'delivered' && C.orderTotals(o).balance > 0) A.toast('שימי לב: נשארה יתרה לתשלום'); A.save(); A.refresh(); A.openOrder(o.id); }
           else if ('approvepay' in b.dataset) { o.paid = Math.max(+o.paid || 0, o.payDue); if (o.status === 'new') o.status = 'confirmed'; A.save(); A.refresh(); A.openOrder(o.id); A.toast('התשלום אושר וההזמנה מאושרת — שלחי לה אישור בוואטסאפ'); }
+          else if ('cancelunpaid' in b.dataset) { o.status = 'cancelled'; A.save(); A.refresh(); A.openOrder(o.id); A.undoToast('ההזמנה בוטלה', () => { o.status = 'new'; A.commit(); }); }
           else if ('paid' in b.dataset) { o.paid = C.orderTotals(o).total; A.save(); A.refresh(); A.openOrder(o.id); A.toast('התשלום נרשם'); }
           else if ('edit' in b.dataset) A.editOrder(o);
           else if ('dup' in b.dataset) { const c = U.clone(o); Object.assign(c, { id: U.uid(), num: s.nextOrderNum++, status: 'new', paid: 0, demo: false, date: U.addDays(U.today(), 1), createdAt: U.today() }); A.state.orders.push(c); A.save(); A.editOrder(c); }
@@ -153,7 +154,7 @@
     if (o.payClaim) return `<div class="notice info section">${A.icon('wallet')}<div><b>הלקוחה דיווחה ששילמה ${U.money(o.payDue)} ב${U.esc(o.payClaim.method || 'העברה')}.</b> בדקי באפליקציה שהכסף נכנס, ואז אשרי.
       <div style="margin-top:8px"><button class="btn sm" data-approvepay>${A.icon('check')}התשלום התקבל — אישור ההזמנה</button></div></div></div>`;
     return `<div class="notice section">${A.icon('wallet')}<div><b>ממתינה ל${kind}: ${U.money(o.payDue)}.</b> ההזמנה לא מאושרת עד שהתשלום מתקבל${ago != null ? ` · נשלחה לפני ${ago} שעות` : ''}${A.payOverdue(o) ? ' · <b>עבר הזמן לתשלום</b> — אפשר לבטל או לשלוח תזכורת' : ''}.
-      <div style="margin-top:8px"><button class="btn sm" data-approvepay>${A.icon('check')}התשלום התקבל — אישור ההזמנה</button></div></div></div>`;
+      <div class="row" style="margin-top:8px"><button class="btn sm" data-approvepay>${A.icon('check')}התשלום התקבל — אישור ההזמנה</button>${A.payOverdue(o) ? `<button class="btn sm danger" data-cancelunpaid>${A.icon('x')}ביטול ההזמנה</button>` : ''}</div></div></div>`;
   }
 
   function waTemplates(o, t) {
@@ -166,7 +167,7 @@
     return [
       { label: 'אישור הזמנה', text: `היי ${first}, תודה שהזמנת מ${biz}! 🤎 ההזמנה מאושרת.\n${items}\nמועד: ${when} (${o.method === 'delivery' ? 'משלוח' : 'איסוף'})${o.method !== 'delivery' && pickup ? `\nכתובת לאיסוף: ${pickup}` : ''}\nסה״כ: ${U.money(t.total)}${t.paid ? `\nשולם: ${U.money(t.paid)}` : ''}${pay && t.balance ? `\n${pay}` : ''}\nמחכה לאפות בשבילך!` },
       { label: 'ההזמנה מוכנה', text: `היי ${first}, ההזמנה שלך מ${biz} מוכנה ${o.method === 'delivery' ? 'ויוצאת אלייך' : 'לאיסוף'} 🥐${t.balance ? `\nיתרה לתשלום: ${U.money(t.balance)}` : ''}` },
-      { label: 'תזכורת תשלום', text: o.payDue > 0 && t.paid < o.payDue ? `היי ${first}, כדי לאשר את הזמנה #${o.num} חסר${o.payMode === 'full' ? ' התשלום' : 'ה המקדמה'} של ${U.money(o.payDue - t.paid)}.${(A.state.form.pay || {}).bit || A.state.settings.phone ? ` ביט: ${(A.state.form.pay || {}).bit || A.state.settings.phone}` : ''}${(A.state.form.pay || {}).paybox ? `\nפייבוקס: ${A.state.form.pay.paybox}` : ''}\nתודה! 🤎` : `היי ${first}, תזכורת עדינה — נשארה יתרה של ${U.money(t.balance)} על הזמנה #${o.num}. אפשר בביט/פייבוקס. תודה! 🤎` },
+      { label: 'תזכורת תשלום', text: o.payDue > 0 && t.paid < o.payDue ? `היי ${first}, כדי לאשר את הזמנה #${o.num} חסר${o.payMode === 'full' ? ' התשלום' : 'ה המקדמה'} של ${U.money(o.payDue - t.paid)}.${(A.state.form.pay || {}).bit || A.state.settings.phone ? ` ביט: ${(A.state.form.pay || {}).bit || A.state.settings.phone}` : ''}${A.safeUrl((A.state.form.pay || {}).paybox) ? `\nפייבוקס: ${A.safeUrl(A.state.form.pay.paybox)}` : ''}\nתודה! 🤎` : `היי ${first}, תזכורת עדינה — נשארה יתרה של ${U.money(t.balance)} על הזמנה #${o.num}. אפשר בביט/פייבוקס. תודה! 🤎` },
       { label: 'בקשת חוות דעת', text: `היי ${first}, מקווה שנהניתם! 🤎 אשמח לשמוע איך היה — ואם אהבת, תמונה או המלצה קטנה עוזרות לי מאוד.` }
     ].filter(m => m.label !== 'תזכורת תשלום' || t.balance > 0);
   }
@@ -182,8 +183,8 @@
       ${t.discount ? `<tr><td>הנחה</td><td class="n">−${U.money(t.discount)}</td></tr>` : ''}${t.delivery ? `<tr><td>משלוח</td><td class="n">${U.money(t.delivery)}</td></tr>` : ''}
       <tr><td><b>סה״כ</b></td><td class="n"><b>${U.money(t.total)}</b></td></tr><tr><td>שולם</td><td class="n">${U.money(t.paid)}</td></tr>${t.balance ? `<tr><td>יתרה</td><td class="n">${U.money(t.balance)}</td></tr>` : ''}</table><hr>
       ${o.allergies ? `<p><b>רגישויות:</b> ${U.esc(o.allergies)}</p>` : ''}${o.notes ? `<p>${U.esc(o.notes)}</p>` : ''}
-      <p style="text-align:center;color:#8a7462">תודה שבחרת ב${U.esc(A.state.settings.businessName)} 🤎</p><script>onload=()=>setTimeout(()=>print(),300)<\/script></body></html>`);
-    w.document.close();
+      <p style="text-align:center;color:#8a7462">תודה שבחרת ב${U.esc(A.state.settings.businessName)} 🤎</p></body></html>`);
+    w.document.close(); setTimeout(() => { try { w.focus(); w.print(); } catch (e) { } }, 500);
   }
 
   /* ---------- טופס הזמנה ---------- */

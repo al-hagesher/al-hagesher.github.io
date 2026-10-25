@@ -21,6 +21,7 @@
     const { page, args } = A.route();
     const p = A.pages[page] || A.pages[''];
     const main = document.getElementById('main');
+    if (!main) return;
     main.onclick = main.oninput = main.onchange = main.onsubmit = null;
     A.setActions('');
     document.getElementById('pageTitle').textContent = typeof p.title === 'function' ? p.title(args) : p.title;
@@ -29,12 +30,14 @@
     document.querySelectorAll('[data-nav]').forEach(a => a.classList.toggle('active', a.dataset.nav === navKey));
     const fresh = A.state.orders.filter(o => o.status === 'new').length;
     document.querySelectorAll('[data-nav="orders"]').forEach(a => { let b = a.querySelector('.nav-badge'); if (!b) { b = document.createElement('i'); b.className = 'nav-badge'; a.appendChild(b); } b.textContent = fresh || ''; b.style.display = fresh ? '' : 'none'; });
-    try { p.render(main, args); }
+    try { p.render(main, args); A.a11y && A.a11y(main); }
     catch (e) { console.error(e); main.innerHTML = `<div class="card"><h3>משהו השתבש</h3><p class="muted">${U.esc(e.message)}</p></div>`; }
     closeMenu();
   };
   // רענון הדף הנוכחי בלי לאבד גלילה
   A.refresh = () => { const y = root.scrollY; A.render(); root.scrollTo(0, y); };
+  // שינוי מלשונית אחרת: מרעננים מיד, או אחרי סגירת חלון פתוח
+  A.onExternalChange = () => { const d = document.getElementById('modal'); if (d && d.open) A._needRefresh = true; else A.refresh(); };
   A.commit = (msg) => { A.save(); A.refresh(); if (msg) { A.toast(msg); A.haptic && A.haptic(); } };
 
   const closeMenu = () => { document.getElementById('sidebar').classList.remove('open'); document.querySelector('.scrim').classList.remove('show'); };

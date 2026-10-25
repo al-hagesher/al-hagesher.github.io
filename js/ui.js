@@ -43,7 +43,29 @@
     cloud: '<path d="M17.5 19H7a5 5 0 1 1 1.1-9.9A6 6 0 0 1 19.6 11a4 4 0 0 1-2.1 8z"/>',
     sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>'
   };
+  // רק תמונות מקומיות/https/data:image — מונע הזרקת קוד דרך שדה התמונה (למשל מגיבוי מזויף)
+  A.safeImg = s => /^(data:image\/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=]+$|https:\/\/|assets\/)/i.test(String(s || '')) ? U.esc(String(s)) : '';
+  A.safeUrl = s => /^https:\/\//i.test(String(s || '').trim()) ? String(s).trim() : '';
   A.icon = (n, cls = '') => `<svg class="ic ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${I[n] || ''}</svg>`;
+
+  /* נגישות: אלמנטים לחיצים שאינם כפתורים נגישים במקלדת; שדות בלי תווית מקבלים תווית מה־placeholder */
+  const CLICKABLE = '[data-open],[data-order],[data-day],[data-c],[data-e],[data-sel],tr[data-edit],tr[data-recipe],.list-item.click';
+  A.a11y = rootEl => {
+    rootEl.querySelectorAll(CLICKABLE).forEach(el => {
+      if (/^(BUTTON|A|INPUT|SELECT|TEXTAREA)$/.test(el.tagName)) return;
+      if (!el.hasAttribute('tabindex')) el.tabIndex = 0;
+      if (!el.hasAttribute('role')) el.setAttribute('role', 'button');
+    });
+    rootEl.querySelectorAll('input:not([type=hidden]):not([aria-label]),select:not([aria-label]),textarea:not([aria-label])').forEach(el => {
+      if (el.closest('label') || (el.id && rootEl.querySelector(`label[for="${el.id}"]`))) return;
+      const t = el.getAttribute('placeholder') || el.title; if (t) el.setAttribute('aria-label', t);
+    });
+  };
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const el = e.target;
+    if (el && el.getAttribute && el.getAttribute('role') === 'button' && !/^(BUTTON|A|INPUT|SELECT|TEXTAREA)$/.test(el.tagName)) { e.preventDefault(); el.click(); }
+  });
 
   /* הודעה קצרה */
   let toastT;
@@ -61,28 +83,35 @@
     clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show', 'has-action'), 6000);
     A.haptic();
   };
-  A.haptic = () => { try { navigator.vibrate && navigator.vibrate(12); } catch (e) { } };
+  A.haptic = () => { try { if (navigator.vibrate && (!navigator.userActivation || navigator.userActivation.hasBeenActive)) navigator.vibrate(12); } catch (e) { } };
 
   /* דיאלוג */
   let pendingClose = null;
   A.modal = ({ title, body, foot = '', size = '', onMount, onClose }) => {
     const d = document.getElementById('modal');
     d.className = size;
-    d.innerHTML = `<div class="m-wrap"><div class="m-head"><h2>${title}</h2><button class="icon-btn" data-close aria-label="סגירה">${A.icon('x')}</button></div>
+    d.setAttribute('aria-labelledby', 'mTitle');
+    d.innerHTML = `<div class="m-wrap"><div class="m-head"><h2 id="mTitle">${title}</h2><button class="icon-btn" data-close aria-label="סגירה">${A.icon('x')}</button></div>
       <div class="m-body">${body}</div>${foot ? `<div class="m-foot">${foot}</div>` : ''}</div>`;
-    d.onclick = e => { if (e.target === d || e.target.closest('[data-close]')) A.closeModal(); };
+    // שינויים שלא נשמרו: לא סוגרים בטעות (לחיצה בחוץ, X, Esc או "אחורה" באנדרואיד)
+    let dirty = false;
+    const tryClose = () => { if (dirty && !root.confirm('יש שינויים שלא נשמרו. לצאת בלי לשמור?')) return; A.closeModal(); };
+    d.onclick = e => { if (e.target === d || e.target.closest('[data-close]')) { const a = e.target.closest('a[href]'); if (a && dirty && !root.confirm('יש שינויים שלא נשמרו. לצאת בלי לשמור?')) { e.preventDefault(); return; } if (a) A.closeModal(); else tryClose(); } };
     // לא סומכים על אירוע close (לא תמיד נשלח) — סוגרים ומפעילים onClose ישירות
     const prev = pendingClose; pendingClose = onClose || null; if (prev) prev();
-    d.oncancel = e => { e.preventDefault(); A.closeModal(); };
+    d.oncancel = e => { e.preventDefault(); tryClose(); };
     d.oninput = d.onchange = null;
+    d.addEventListener('input', () => { dirty = true; }, { once: true });
     if (!d.open) d.showModal();
     onMount && onMount(d.querySelector('.m-wrap'));
+    A.a11y && A.a11y(d);
     const f = d.querySelector('[autofocus]'); if (f) f.focus();
     return d;
   };
   A.closeModal = () => {
     const d = document.getElementById('modal'); if (d.open) d.close();
     const f = pendingClose; pendingClose = null; if (f) f();
+    if (A._needRefresh) { A._needRefresh = false; setTimeout(() => { if (!d.open) A.refresh(); }, 0); }
   };
   A.confirm = (msg, okLabel = 'אישור', danger = true) => new Promise(res => {
     let ok = false;
@@ -100,7 +129,12 @@
     el.querySelectorAll('[name]').forEach(f => {
       if (f.type === 'checkbox') { if (f.dataset.multi) { o[f.name] = o[f.name] || []; if (f.checked) o[f.name].push(f.value); } else o[f.name] = f.checked; }
       else if (f.type === 'radio') { if (f.checked) o[f.name] = f.value; }
-      else if (f.type === 'number' || f.dataset.num) o[f.name] = f.value === '' ? '' : U.num(f.value);
+      else if (f.type === 'number' || f.dataset.num) {
+        let v = f.value === '' ? '' : U.num(f.value);
+        if (v !== '' && f.min !== '' && v < +f.min) v = +f.min;
+        if (v !== '' && f.max !== '' && f.max != null && v > +f.max) v = +f.max;
+        o[f.name] = v;
+      }
       else o[f.name] = f.value.trim();
     });
     return o;

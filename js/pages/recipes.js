@@ -4,7 +4,7 @@
   const view = A.recipeView = { q: '', cat: 'הכל', sort: 'name', factor: 1, mode: 'orig', bakers: false, id: null };
 
   const STATUS_TXT = { ok: 'רווחי', warn: 'רווח נמוך', bad: 'בהפסד', none: 'ללא מחיר' };
-  const thumb = r => r.image ? `<img src="${r.image}" alt="">` : `<span class="init">${U.esc((r.name || '?').trim()[0] || '?')}</span>`;
+  const thumb = r => A.safeImg(r.image) ? `<img src="${A.safeImg(r.image)}" alt="">` : `<span class="init">${U.esc((r.name || '?').trim()[0] || '?')}</span>`;
 
   /* ---------- רשימה ---------- */
   P.recipes = {
@@ -121,7 +121,7 @@
       main.innerHTML = `
       <div class="print-only" style="text-align:center;margin-bottom:10px"><img src="assets/logo.png" style="width:160px"></div>
       <div class="card section recipe-hero cables">
-        <div class="ph">${r.image ? `<img src="${r.image}" alt="">` : `<span style="font-family:var(--serif);font-size:4rem;color:var(--caramel)">${U.esc(r.name[0] || '')}</span>`}</div>
+        <div class="ph">${A.safeImg(r.image) ? `<img src="${A.safeImg(r.image)}" alt="${U.esc(r.name)}">` : `<span style="font-family:var(--serif);font-size:4rem;color:var(--caramel)">${U.esc(r.name[0] || '')}</span>`}</div>
         <div class="stack">
           <div class="row"><span class="chip">${U.esc(r.category || 'ללא קטגוריה')}</span>${(r.tags || []).map(t => `<span class="chip">${U.esc(t)}</span>`).join('')}
             <button class="icon-btn fav ${r.favorite ? 'on' : ''}" data-act="fav" aria-label="מועדף">${A.icon('star')}</button></div>
@@ -300,8 +300,8 @@
       <div class="row"><span>תאריך ייצור: ${U.fmtDate(U.today())}</span>${days ? `<span>לשימוש עד: ${U.fmtDate(U.addDays(U.today(), days))} (${where})</span>` : ''}</div>
       ${s.note ? `<p>אחסון: ${U.esc(s.note)}</p>` : ''}
       <div class="row"><span>${U.esc(st.businessName || 'על הגשר')}${st.phone ? ' · ' + U.esc(st.phone) : ''}</span><span>משקל משוער: ${Math.round(total * ((r.times || {}).bake ? 0.9 : 1))} ג׳</span></div></div>
-      <script>onload=()=>setTimeout(()=>print(),300)<\/script></body></html>`);
-    w.document.close();
+      </body></html>`);
+    w.document.close(); setTimeout(() => { try { w.focus(); w.print(); } catch (e) { } }, 500);
   }
   A.printLabel = printLabel;
 
@@ -385,7 +385,7 @@
           <div class="stack">
             <label class="field"><span>תגיות (מופרדות בפסיק)</span><input name="tags" value="${U.esc((d.tags || []).join(', '))}" placeholder="פרווה, ללא גלוטן, שבת"></label>
             <label class="field"><span>תמונה</span><input type="file" accept="image/*" data-img></label>
-            <div id="imgPrev">${d.image ? `<img src="${d.image}" style="max-height:90px;border-radius:8px"> <button class="btn sm danger" data-noimg>הסרת תמונה</button>` : ''}</div>
+            <div id="imgPrev">${A.safeImg(d.image) ? `<img src="${A.safeImg(d.image)}" alt="" style="max-height:90px;border-radius:8px"> <button class="btn sm danger" data-noimg>הסרת תמונה</button>` : ''}</div>
           </div>
         </div>`,
       foot: `<button class="btn" data-save>${A.icon('check')}שמירה</button><button class="btn ghost" data-close>ביטול</button>`,
@@ -407,7 +407,7 @@
         dlg.oninput = live;
         dlg.onchange = async e => {
           if (e.target.matches('[data-img]') && e.target.files[0]) {
-            try { d.image = await A.readImage(e.target.files[0]); dlg.querySelector('#imgPrev').innerHTML = `<img src="${d.image}" style="max-height:90px;border-radius:8px">`; }
+            try { d.image = await A.readImage(e.target.files[0]); dlg.querySelector('#imgPrev').innerHTML = `<img src="${A.safeImg(d.image)}" alt="" style="max-height:90px;border-radius:8px">`; }
             catch (err) { A.toast('לא הצלחתי לקרוא את התמונה'); }
           }
           live();

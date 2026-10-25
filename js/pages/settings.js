@@ -8,6 +8,7 @@
       const s = A.state.settings;
       const lastB = s.lastBackup ? U.diffDays(U.today(), s.lastBackup) : null;
       main.innerHTML = `
+      ${installCard()}
       ${syncCard()}
       <div class="grid g2">
         <div class="card"><div class="card-h"><h3>פרטי העסק</h3></div>
@@ -47,6 +48,7 @@
           <button class="btn danger" data-act="reset">${A.icon('trash')}מחיקת כל הנתונים</button></div>
       </div>`;
       if (A.sync && A.sync.enabled()) { A.sync.render(); A.drawSyncQr(); }
+      drawInstallQr();
       main.onchange = async e => {
         const f = e.target;
         if (f.matches('[data-restore]') && f.files[0]) return restore(f.files[0]);
@@ -63,6 +65,7 @@
         const b = e.target.closest('[data-act]'); if (!b) return;
         const act = b.dataset.act;
         if (act.startsWith('sync')) return syncAction(act, b);
+        if (act === 'install' && A.install.prompt) { A.install.prompt.prompt(); const r = await A.install.prompt.userChoice; A.install.prompt = null; if (r.outcome !== 'accepted') A.toast('אפשר להתקין בכל זמן מכאן'); A.refresh(); return; }
         if (act === 'backup') {
           A.download(`al-hagesher-backup-${U.today()}.json`, JSON.stringify(A.state, null, 1));
           s.lastBackup = U.today(); A.commit('הגיבוי ירד');
@@ -79,6 +82,34 @@
       };
     }
   };
+
+  /* ---------- התקנה על הטלפון ---------- */
+  function installCard() {
+    if (A.isStandalone()) return '';
+    const pf = A.platform(), url = A.PUBLIC_BASE, onSite = location.href.startsWith(url);
+    const steps = pf === 'ios'
+      ? `<ol class="install-steps"><li>פותחים את הכתובת ב<b>ספארי</b> (לא באינסטגרם/וואטסאפ).</li><li>לוחצים על כפתור <b>השיתוף</b> ${A.icon('upload', 'inl')} בתחתית המסך.</li><li>גוללים ובוחרים <b>"הוספה למסך הבית"</b>, ואז <b>"הוסף"</b>.</li></ol>`
+      : pf === 'android'
+        ? `<ol class="install-steps"><li>פותחים את הכתובת ב<b>כרום</b>.</li><li>לוחצים על <b>⋮</b> למעלה ובוחרים <b>"התקנת אפליקציה"</b> (או "הוספה למסך הבית").</li><li>מאשרים — האייקון של על הגשר יופיע במסך הבית.</li></ol>`
+        : `<ol class="install-steps"><li>בטלפון: סורקים את הקוד או פותחים את הכתובת.</li><li><b>אייפון:</b> בספארי ← שיתוף ← "הוספה למסך הבית".</li><li><b>אנדרואיד:</b> בכרום ← ⋮ ← "התקנת אפליקציה".</li></ol>`;
+    return `<div class="card section cables"><div class="card-h"><h3>${A.icon('download')}התקנה על הטלפון</h3></div>
+      <div class="grid g2" style="align-items:start">
+        <div class="stack">
+          <p style="margin:0">האפליקציה נפתחת מהמסך הראשי כמו כל אפליקציה, במסך מלא, ועובדת גם בלי אינטרנט. לא צריך חנות אפליקציות.</p>
+          ${A.install.prompt ? `<button class="btn" data-act="install">${A.icon('download')}התקנה עכשיו</button>` : ''}
+          ${steps}
+          ${!onSite ? `<div class="notice info">${A.icon('alert')}<div>חשוב להתקין מהכתובת הקבועה: <b dir="ltr">${U.esc(url)}</b></div></div>` : ''}
+          <p class="small muted" style="margin:0">אחרי ההתקנה: בהגדרות ← "סנכרון" כדי שהנתונים מהמחשב יופיעו גם בטלפון.</p>
+        </div>
+        ${pf === 'desktop' ? `<div style="text-align:center"><div class="qr" id="installQr"></div><div class="small muted" style="margin-top:6px">סריקה במצלמת הטלפון</div></div>` : ''}
+      </div></div>`;
+  }
+  function drawInstallQr() {
+    const el = document.getElementById('installQr'); if (!el) return;
+    const draw = () => { el.innerHTML = ''; new root.QRCode(el, { text: A.PUBLIC_BASE, width: 360, height: 360, colorDark: '#4a2a16', colorLight: '#ffffff', correctLevel: root.QRCode.CorrectLevel.M }); };
+    if (root.QRCode) return draw();
+    const s = document.createElement('script'); s.src = 'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js'; s.onload = draw; document.head.appendChild(s);
+  }
 
   /* ---------- סנכרון בין מכשירים ---------- */
   function syncCard() {

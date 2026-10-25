@@ -161,10 +161,15 @@
     fr.onload = () => {
       const img = new Image();
       img.onload = () => {
-        const s = Math.min(1, max / Math.max(img.width, img.height));
-        const c = document.createElement('canvas'); c.width = Math.round(img.width * s); c.height = Math.round(img.height * s);
-        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
-        res(c.toDataURL('image/jpeg', 0.78));
+        // חיתוך מרכזי ליחס 4:3 (כמו תמונת הפרופיל) והקטנה — חוסך מקום בסנכרון
+        const ratio = 4 / 3; let sw = img.width, sh = img.height;
+        if (sw / sh > ratio) sw = sh * ratio; else sh = sw / ratio;
+        const sx = (img.width - sw) / 2, sy = (img.height - sh) / 2;
+        const s = Math.min(1, max / sw);
+        const c = document.createElement('canvas'); c.width = Math.round(sw * s); c.height = Math.round(sh * s);
+        const ctx = c.getContext('2d'); ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(img, sx, sy, sw, sh, 0, 0, c.width, c.height);
+        res(c.toDataURL('image/jpeg', 0.8));
       };
       img.onerror = rej; img.src = fr.result;
     };

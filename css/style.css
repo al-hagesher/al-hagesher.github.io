@@ -228,6 +228,11 @@ tfoot td { font-weight: 700; border-top: 2px solid var(--line-2); }
 .recipe-hero { display: grid; grid-template-columns: 300px 1fr; gap: 22px; align-items: start; }
 .recipe-hero .ph { aspect-ratio: 4/3; border-radius: var(--r); overflow: hidden; background: var(--sand-2); display: flex; align-items: center; justify-content: center; }
 .recipe-hero .ph img { width: 100%; height: 100%; object-fit: cover; }
+.install-steps { margin: 0; padding-inline-start: 20px; line-height: 2; }
+.photo-edit { position: relative; }
+.photo-actions { position: absolute; inset-inline: 10px; bottom: 10px; display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-start; }
+.photo-actions .btn { box-shadow: 0 2px 10px rgba(0, 0, 0, .25); }
+.photo-actions .btn.ghost { background: var(--glass); }
 .cols-main { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); }
 .form-grid.c5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 @media (max-width: 860px) { .cols-main { grid-template-columns: minmax(0, 1fr); } .form-grid.c5 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
@@ -415,6 +420,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: non
   .timers { bottom: 80px; }
   .m-body { padding: 16px; }
   .hide-m { display: none !important; }
+  #toast { bottom: calc(84px + env(safe-area-inset-bottom)); max-width: calc(100vw - 32px); }
   .seg.scroll { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
   .seg.scroll::-webkit-scrollbar { display: none; }
   .seg.scroll button { flex: none; white-space: nowrap; }

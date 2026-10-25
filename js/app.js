@@ -53,6 +53,13 @@
     });
   }
 
+  /* ---------- התקנה כאפליקציה ---------- */
+  A.install = { prompt: null };
+  A.isStandalone = () => root.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  A.platform = () => { const ua = navigator.userAgent; return /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1) ? 'ios' : /Android/.test(ua) ? 'android' : 'desktop'; };
+  root.addEventListener('beforeinstallprompt', e => { e.preventDefault(); A.install.prompt = e; if (A.route().page === 'settings') A.refresh(); });
+  root.addEventListener('appinstalled', () => { A.install.prompt = null; A.toast('האפליקציה הותקנה 🎉'); });
+
   A.start = async () => {
     buildNav();
     await A.load();

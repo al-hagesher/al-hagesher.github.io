@@ -22,6 +22,7 @@
       if (claimed.length) alerts.push(['wallet', `${claimed.length === 1 ? 'לקוחה דיווחה' : claimed.length + ' לקוחות דיווחו'} על תשלום — לבדוק ולאשר`, 'orders']);
       const overdue = A.state.orders.filter(o => A.payOverdue && A.payOverdue(o));
       if (overdue.length) alerts.push(['alert', `${overdue.length === 1 ? 'הזמנה אחת לא שולמה' : overdue.length + ' הזמנות לא שולמו'} בזמן — לבטל או לשלוח תזכורת`, 'orders']);
+      if (A.platform && A.platform() !== 'desktop' && !A.isStandalone()) alerts.push(['download', 'אפשר להתקין את האפליקציה על המסך הראשי — 3 צעדים', 'settings']);
       const fresh = A.state.orders.filter(o => o.status === 'new');
       if (fresh.length) alerts.push(['orders', `${fresh.length === 1 ? 'הזמנה חדשה מחכה' : fresh.length + ' הזמנות חדשות מחכות'} לאישור שלך`, 'orders']);
       const late = open.filter(o => o.date < today);

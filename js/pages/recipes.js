@@ -61,6 +61,8 @@
     A.refresh();
     const i = main.querySelector('[data-f="q"]'); if (i) { i.focus(); try { i.setSelectionRange(pos, pos); } catch (e) { } }
   }
+  // תמונת הספרייה המקורית של מתכון בסיס (אם יש)
+  const libImage = r => r.library && (A.LIBRARY || []).some(x => 'lib-' + x.key === r.id && !x.noImg) ? `assets/recipes/${r.id.slice(4)}.jpg` : '';
   const isComponent = r => r.category === 'בסיסים וקרמים' || (!r.price && C.usedAsSub(r.id).length > 0);
   A.isComponent = isComponent;
   const sold = id => U.sum(C.activeOrders(), o => U.sum(o.items.filter(i => i.recipeId === id), i => i.qty));
@@ -121,7 +123,12 @@
       main.innerHTML = `
       <div class="print-only" style="text-align:center;margin-bottom:10px"><img src="assets/logo.png" style="width:160px"></div>
       <div class="card section recipe-hero cables">
-        <div class="ph">${A.safeImg(r.image) ? `<img src="${A.safeImg(r.image)}" alt="${U.esc(r.name)}">` : `<span style="font-family:var(--serif);font-size:4rem;color:var(--caramel)">${U.esc(r.name[0] || '')}</span>`}</div>
+        <div class="ph photo-edit">${A.safeImg(r.image) ? `<img src="${A.safeImg(r.image)}" alt="${U.esc(r.name)}">` : `<span style="font-family:var(--serif);font-size:4rem;color:var(--caramel)">${U.esc(r.name[0] || '')}</span>`}
+          <div class="photo-actions no-print">
+            <label class="btn sm">${A.icon('image')}${r.image ? 'החלפת תמונה' : 'הוספת תמונה'}<input type="file" accept="image/*" data-photo hidden></label>
+            ${r.library && r.image && !r.image.startsWith('assets/') && libImage(r) ? `<button class="btn sm soft" data-act="photoReset">התמונה המקורית</button>` : ''}
+            ${r.image ? `<button class="btn sm ghost" data-act="photoRemove" aria-label="הסרת התמונה">${A.icon('trash')}</button>` : ''}
+          </div></div>
         <div class="stack">
           <div class="row"><span class="chip">${U.esc(r.category || 'ללא קטגוריה')}</span>${(r.tags || []).map(t => `<span class="chip">${U.esc(t)}</span>`).join('')}
             <button class="icon-btn fav ${r.favorite ? 'on' : ''}" data-act="fav" aria-label="מועדף">${A.icon('star')}</button></div>
@@ -218,6 +225,8 @@
           if (!a1 || !a2) return A.toast('הזיני קוטר (24) או מידות (20x30)');
           setFactor(a2 / a1); A.toast('הוכפל פי ' + U.fmt(U.round(a2 / a1, 2)));
         }
+        else if (b.dataset.act === 'photoReset') { r.image = libImage(r); A.commit('חזרה לתמונה המקורית'); }
+        else if (b.dataset.act === 'photoRemove') { const old = r.image; r.image = ''; A.commit(); A.undoToast('התמונה הוסרה', () => { r.image = old; A.commit(); }); }
         else if (b.dataset.act === 'useSuggested') { r.price = p.suggested; A.commit('המחיר עודכן'); }
         else if (b.dataset.act === 'fav') { r.favorite = !r.favorite; A.commit(); }
         else if (b.dataset.act === 'dup') duplicate(r);
@@ -229,6 +238,12 @@
         if (k === 'target') { const v = U.num(e.target.value); if (v > 0) setFactor(v / (+r.yield || 1)); }
         if (k === 'bakers') { view.bakers = e.target.checked; A.refresh(); }
         if (k === 'price') { r.price = U.num(e.target.value); A.commit('המחיר נשמר'); }
+        if (e.target.matches('[data-photo]') && e.target.files[0]) {
+          const file = e.target.files[0];
+          if (!/^image\//.test(file.type)) return A.toast('זה לא קובץ תמונה');
+          A.toast('מעבדת את התמונה…');
+          A.readImage(file, 900).then(img => { r.image = img; A.commit('התמונה עודכנה'); }).catch(() => A.toast('לא הצלחתי לקרוא את התמונה. נסי קובץ JPG או PNG'));
+        }
       };
       document.getElementById('topActions').onclick = e => {
         const b = e.target.closest('[data-act]'); if (!b) return;

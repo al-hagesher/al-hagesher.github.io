@@ -3,7 +3,7 @@
   const A = root.App, U = A.util, C = A.calc, P = A.pages = A.pages || {};
 
   P[''] = {
-    title: () => { const h = new Date().getHours(); const n = A.state && A.state.settings.ownerName; return (h < 12 ? 'בוקר טוב' : h < 17 ? 'צהריים טובים' : 'ערב טוב') + (n ? ', ' + n : ''); },
+    title: 'על הגשר',
     render(main) {
       const s = A.state.settings, today = U.today(), tmr = U.addDays(today, 1);
       A.setActions(`<button class="btn" data-act="newOrder">${A.icon('plus')}הזמנה חדשה</button>`);
@@ -43,7 +43,13 @@
 
       const first = !A.state.orders.length && !s.welcomeDone;
       const goal = +s.monthlyGoal || 0;
+      const h = new Date().getHours(), owner = s.ownerName;
+      const greet = (h < 5 ? 'לילה טוב' : h < 12 ? 'בוקר טוב' : h < 17 ? 'צהריים טובים' : h < 21 ? 'ערב טוב' : 'לילה טוב') + (owner ? ', ' + owner : '');
+      const nowD = new Date(), dateTxt = `יום ${U.DAYS[nowD.getDay()]} · ${nowD.getDate()} ב${U.MONTHS[nowD.getMonth()]}`;
+      const weekCount = todayO.length + tmrO.length + weekO.length;
+      const line = weekCount ? `${weekCount === 1 ? 'הזמנה אחת' : weekCount + ' הזמנות'} פתוחות השבוע · ${U.money(weekRev, 0)} צפוי` : 'השבוע עוד פנוי — זמן טוב ליצירה, לצילום ולמנוחה 🤎';
       main.innerHTML = `
+      <div class="card hero cables section"><img class="hero-logo" src="assets/logo.png" alt="על הגשר"><div><div class="hero-date">${dateTxt}</div><h2>${U.esc(greet)}</h2><p>${line}</p></div></div>
       ${first ? `<div class="card welcome section cables">
         <h2 style="margin-bottom:8px">ברוכה הבאה למערכת של על הגשר 🤎</h2>
         <p style="margin:0 0 14px;opacity:.9">כבר מחכים לך ${A.state.recipes.filter(r => r.library).length} מתכוני בסיס מדויקים בגרמים, מחסן עם ${A.state.ingredients.length} מצרכים ומחירים משוערים, ותמחור אוטומטי לכל מתכון. שלושה צעדים לפתיחה:</p>

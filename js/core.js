@@ -189,6 +189,7 @@
     try { s = await idbGet(); } catch (e) { /* נופלים ל-localStorage */ }
     if (!s) { try { s = JSON.parse(root.localStorage.getItem(DB) || 'null'); } catch (e) { s = null; } }
     A.state = A.normalize(s);
+    A.requestPersist();
     if (!A.state.seeded && A.seed) { A.seed.catalog(A.state); A.state.seeded = true; A.saveNow(); }
     if (A.seed && A.seed.library && A.seed.library(A.state)) A.saveNow();
     if (A.seed && A.seed.hasDemo && A.seed.hasDemo(A.state)) { A.seed.clearDemo(A.state); A.saveNow(); } // ניקוי נתוני דוגמה מגרסאות קודמות
@@ -211,7 +212,24 @@
     try { bc && bc.postMessage({ t: 'saved', from: TAB }); } catch (e) { }
     (A.saveHooks || []).forEach(f => { try { f(); } catch (e) { console.warn(e); } });
   };
-  A.save = U.debounce(A.saveNow, 250);
+  // שמירה מושהית קצרה, אבל אף פעם לא הולכת לאיבוד: נשמרת מיד כשהאפליקציה נסגרת או עוברת לרקע
+  let saveTimer = null;
+  A.save = () => { clearTimeout(saveTimer); saveTimer = setTimeout(() => { saveTimer = null; A.saveNow(); }, 250); };
+  A.flush = () => { if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; return A.saveNow(); } return Promise.resolve(); };
+  if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') A.flush(); });
+    root.addEventListener('pagehide', () => A.flush());
+  }
+  // בקשה מהדפדפן לאחסון קבוע (לא נמחק אוטומטית כשחסר מקום / אחרי זמן בלי שימוש)
+  A.storage = { persisted: null };
+  A.requestPersist = async () => {
+    try {
+      if (!navigator.storage || !navigator.storage.persist) return null;
+      let p = await navigator.storage.persisted();
+      if (!p) p = await navigator.storage.persist();
+      A.storage.persisted = p; return p;
+    } catch (e) { return null; }
+  };
 
   /* ---------- חישובים ---------- */
   A.saveHooks = A.saveHooks || [];

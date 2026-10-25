@@ -32,6 +32,8 @@
   const LISTS = ['ingredients', 'recipes', 'orders', 'expenses'];
   A.syncMerge = (base, local, remote) => {
     base = base || {}; local = U.clone(local); remote = U.clone(remote || {});
+    // הגנה: מכשיר עם גרסה ישנה שלא מכירה חלק שלם (למשל טופס ההזמנות) לא ימחק אותו מהענן
+    ['ingredients', 'recipes', 'orders', 'expenses', 'settings', 'customers', 'form', 'wheel'].forEach(k => { if (remote[k] === undefined && base[k] !== undefined) remote[k] = U.clone(base[k]); });
     const out = A.normalize(local);
     LISTS.forEach(k => out[k] = mergeList(base[k], local[k], remote[k]));
     out.settings = mergeMap(base.settings, local.settings, remote.settings);
@@ -73,7 +75,9 @@
     return s;
   };
   A.reconcileState = (target, source) => recObj(target, U.clone(source));
-  A.isFreshState = s => !s.recipes.length && !s.orders.length && !s.expenses.length && !s.wheel.entries.length;
+  // "מכשיר ריק": אין שום נתון שהמשתמשת הזינה (מתכוני הבסיס והמחסן ההתחלתי לא נחשבים)
+  A.isFreshState = s => !s.orders.length && !s.expenses.length && !s.wheel.entries.length && !s.recipes.some(r => !r.library)
+    && !Object.keys(s.customers || {}).length && !(s.form && s.form.enabled) && !s.settings.welcomeDone && !s.settings.ownerName;
   A.syncEq = eq;
 
   if (typeof document === 'undefined') return; // סביבת בדיקות
@@ -82,7 +86,8 @@
   const S = A.sync = { status: 'off', error: '', pending: false };
   let cfg = {}; try { cfg = JSON.parse(localStorage.getItem(CFG_KEY) || '{}'); } catch (e) { cfg = {}; }
   let base = null, busy = false, again = false, applying = false;
-  const saveCfg = () => { try { localStorage.setItem(CFG_KEY, JSON.stringify(cfg)); } catch (e) { } };
+  // ההגדרות נשמרות גם ב־localStorage וגם ב־IndexedDB — אם אחד נמחק, השני משחזר
+  const saveCfg = () => { try { localStorage.setItem(CFG_KEY, JSON.stringify(cfg)); } catch (e) { } A.kvPut && A.kvPut('syncCfg', cfg); };
   S.cfg = () => cfg;
   S.enabled = () => !!cfg.code;
 
@@ -122,6 +127,17 @@
     busy = true; setStatus('syncing');
     try {
       if (base === null) base = (await A.kvGet(BASE_KEY)) || null;
+      // מכשיר שהנתונים המקומיים שלו נמחקו (או חדש) אבל עדיין מחובר — מקבל את הכל מהענן, בלי כפילויות
+      if (!base && A.isFreshState(A.state)) {
+        const row = (await rpc('sync_get', { p_code: cfg.code }))[0];
+        if (row) {
+          applying = true; A.reconcileState(A.state, A.normalize(row.data));
+          try { await A.saveNow(); } finally { applying = false; }
+          base = U.clone(row.data); cfg.version = row.ver; await A.kvPut(BASE_KEY, base);
+          cfg.last = new Date().toISOString(); saveCfg(); S.pending = true; tryRefresh(); setStatus('ok');
+          return;
+        }
+      }
       for (let attempt = 0; attempt < 5; attempt++) {
         const snap = U.clone(A.state);
         const rv = await rpc('sync_version', { p_code: cfg.code });
@@ -181,6 +197,16 @@
     try { await A.saveNow(); } finally { applying = false; }
     await S.syncNow(); // דוחף את הנתונים המקומיים שנוספו (אם יש)
   };
+  // גרסאות קודמות בענן (צילום אוטומטי כל כמה שעות)
+  S.history = async () => cfg.code ? rpc('sync_history', { p_code: cfg.code }) : [];
+  S.restore = async id => {
+    const data = await rpc('sync_snapshot', { p_code: cfg.code, p_id: id });
+    await S.syncNow(); // קודם מוודאים שהמצב הנוכחי בענן
+    await rpc('sync_checkpoint', { p_code: cfg.code }); // ושומרים אותו בהיסטוריה — כדי שאפשר לחזור אליו
+    if (!data) throw new Error('הגרסה לא נמצאה');
+    A.reconcileState(A.state, A.normalize(data));
+    await A.saveNow(); // השמירה מפעילה סנכרון שמעדכן את כל המכשירים
+  };
   S.disable = async () => { cfg = {}; base = null; saveCfg(); await A.kvPut(BASE_KEY, null); setStatus('off'); };
   S.pairLink = () => {
     const appUrl = location.protocol.startsWith('http') && !/localhost|127\.0\.0\.1/.test(location.hostname) ? location.origin + location.pathname : A.PUBLIC_BASE;
@@ -203,7 +229,10 @@
   }
   S.render = render;
 
-  S.init = () => {
+  S.init = async () => {
+    if (!cfg.code) { try { const c = await A.kvGet('syncCfg'); if (c && c.code) { cfg = c; saveCfg(); } } catch (e) { } }
+    // לפני שהאפליקציה נסגרת/עוברת לרקע — מסנכרנים מיד
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && cfg.code && (S.status === 'dirty')) S.syncNow(); });
     if (cfg.code) { setStatus('dirty'); setTimeout(S.syncNow, 400); } else render();
     setInterval(() => { if (cfg.code && document.visibilityState === 'visible') S.syncNow(); else render(); }, 20000);
     setInterval(tryRefresh, 1500);

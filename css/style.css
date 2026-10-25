@@ -69,6 +69,35 @@ img { max-width: 100%; }
 .kpi .lbl .ic, .card-h h3 .ic { width: 17px; height: 17px; color: var(--brown-3); }
 svg.inl { width: 15px; height: 15px; vertical-align: -2px; }
 
+/* ---------- מסך פתיחה ---------- */
+#splash {
+  position: fixed; inset: 0; z-index: 1000; background: var(--cream); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 26px;
+  transition: opacity .5s ease, visibility .5s; animation: splashFailsafe 0s 5s forwards; /* אם משהו נתקע — נעלם לבד */
+}
+#splash::before {
+  content: ''; position: absolute; inset-inline-end: 0; top: 0; width: 70vw; height: 45vh; pointer-events: none; opacity: .07;
+  background: repeating-linear-gradient(35deg, transparent 0 18px, var(--brown) 18px 19px);
+  -webkit-mask-image: radial-gradient(circle at 100% 0, #000, transparent 70%); mask-image: radial-gradient(circle at 100% 0, #000, transparent 70%);
+}
+#splash.done { opacity: 0; visibility: hidden; }
+#splash .splash-logo { width: min(240px, 60vw); mix-blend-mode: multiply; animation: splashIn 1s cubic-bezier(.2, .7, .2, 1) both; }
+#splash .splash-bar { width: 96px; height: 2px; border-radius: 2px; background: var(--line); overflow: hidden; position: relative; animation: splashIn 1s .25s both; }
+#splash .splash-bar::after { content: ''; position: absolute; top: 0; bottom: 0; width: 40%; background: var(--brown-3); border-radius: 2px; animation: splashBar 1.2s ease-in-out infinite; }
+@keyframes splashIn { from { opacity: 0; transform: translateY(10px) scale(.97); } to { opacity: 1; transform: none; } }
+@keyframes splashBar { from { right: -40%; } to { right: 100%; } }
+@keyframes splashFailsafe { to { opacity: 0; visibility: hidden; } }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) #splash .splash-logo { filter: invert(1) sepia(.35) saturate(1.4) hue-rotate(180deg) brightness(1.05); mix-blend-mode: screen; } }
+:root[data-theme="dark"] #splash .splash-logo { filter: invert(1) sepia(.35) saturate(1.4) hue-rotate(180deg) brightness(1.05); mix-blend-mode: screen; }
+
+/* כותרת הבית */
+.hero { display: flex; align-items: center; gap: 18px; padding: 22px 24px; }
+.hero .hero-logo { width: 120px; flex: none; mix-blend-mode: multiply; }
+.hero .hero-date { color: var(--muted); font-size: .9rem; }
+.hero h2 { font-size: 1.7rem; margin: 2px 0 6px; }
+.hero p { margin: 0; color: var(--ink); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .hero-logo { filter: invert(1) sepia(.35) saturate(1.4) hue-rotate(180deg) brightness(1.05); mix-blend-mode: screen; } }
+:root[data-theme="dark"] .hero-logo { filter: invert(1) sepia(.35) saturate(1.4) hue-rotate(180deg) brightness(1.05); mix-blend-mode: screen; }
+
 /* ---------- מבנה ---------- */
 .app { display: flex; min-height: 100vh; }
 .sidebar {
@@ -420,6 +449,12 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: non
   .timers { bottom: 80px; }
   .m-body { padding: 16px; }
   .hide-m { display: none !important; }
+  .hero { flex-direction: column; text-align: center; gap: 10px; padding: 22px 16px 18px; }
+  .hero .hero-logo { width: 150px; }
+  .hero h2 { font-size: 1.45rem; }
+  .kpi { padding: 14px 15px; } .kpi .val { font-size: 1.35rem; }
+  body.home .topbar .mini-logo { display: none; }
+  body.home .topbar h1 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
   #toast { bottom: calc(84px + env(safe-area-inset-bottom)); max-width: calc(100vw - 32px); }
   .seg.scroll { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
   .seg.scroll::-webkit-scrollbar { display: none; }

@@ -30,6 +30,7 @@
           </div></div>
         <div class="card"><div class="card-h"><h3>${A.icon('download')}גיבוי ושחזור</h3></div>
           <p style="margin-top:0">${A.sync && A.sync.enabled() ? 'הסנכרון שומר עותק מעודכן בענן. בנוסף, מומלץ להוריד גיבוי לקובץ פעם בחודש.' : 'כל הנתונים נשמרים בדפדפן במכשיר הזה. מחיקת נתוני גלישה או החלפת מכשיר — ימחקו אותם. <b>גבי פעם בשבוע</b> או הפעילי סנכרון.'}</p>
+          <p class="small" style="margin:0 0 6px">${A.storage.persisted === true ? '✓ האחסון במכשיר מוגן מפני מחיקה אוטומטית של הדפדפן.' : A.storage.persisted === false ? '⚠️ הדפדפן לא אישר אחסון מוגן. התקנת האפליקציה על המסך הראשי והפעלת סנכרון שומרות על הנתונים.' : ''}</p>
           <p class="small ${lastB == null || lastB > 7 ? '' : 'muted'}" style="${lastB == null || lastB > 7 ? 'color:var(--bad)' : ''}">${lastB == null ? 'עוד לא בוצע גיבוי.' : `גיבוי אחרון: ${U.fmtDate(s.lastBackup)} (לפני ${lastB} ימים)`}</p>
           <div class="row"><button class="btn" data-act="backup">${A.icon('download')}הורדת גיבוי</button>
           <label class="btn ghost">${A.icon('upload')}שחזור מגיבוי<input type="file" accept=".json,application/json" data-restore hidden></label>
@@ -47,7 +48,19 @@
           <p class="small muted" style="margin-top:0">מוחק את כל הנתונים במכשיר הזה. לא ניתן לבטל — הורידי גיבוי קודם.</p>
           <button class="btn danger" data-act="reset">${A.icon('trash')}מחיקת כל הנתונים</button></div>
       </div>`;
-      if (A.sync && A.sync.enabled()) { A.sync.render(); A.drawSyncQr(); }
+      if (A.sync && A.sync.enabled()) {
+        A.sync.render(); A.drawSyncQr();
+        const hb = main.querySelector('#histBox');
+        if (hb) hb.addEventListener('toggle', async () => {
+          if (!hb.open) return;
+          const el = main.querySelector('#histList');
+          try {
+            const rows = await A.sync.history();
+            el.innerHTML = rows.length ? rows.map(h => `<div class="list-item"><div class="main"><div class="t">${new Date(h.saved_at).toLocaleString('he-IL', { day: 'numeric', month: 'numeric', year: '2-digit', hour: '2-digit', minute: '2-digit' })}</div><div class="s">${h.orders} הזמנות · ${h.recipes} מתכונים</div></div><button class="btn sm ghost" data-restore-ver="${h.id}">שחזור</button></div>`).join('')
+              : 'עוד אין גרסאות קודמות — צילום ראשון נשמר אחרי השינוי הבא.';
+          } catch (err) { el.textContent = 'אין חיבור כרגע.'; }
+        });
+      }
       drawInstallQr();
       main.onchange = async e => {
         const f = e.target;
@@ -60,6 +73,12 @@
         s[f.name] = v; A.save(); A.toast('נשמר');
       };
       main.onclick = async e => {
+        const rv = e.target.closest('[data-restore-ver]');
+        if (rv) {
+          if (!await A.confirm('לשחזר את הגרסה הזאת? כל השינויים שנעשו אחריה יוחלפו — בכל המכשירים המחוברים. (הגרסה הנוכחית נשמרת בהיסטוריה, אז אפשר לחזור אליה.)', 'שחזור', false)) return;
+          try { await A.flush(); await A.sync.restore(+rv.dataset.restoreVer); A.refresh(); A.toast('הגרסה שוחזרה'); } catch (err) { A.toast(err.message || 'השחזור נכשל'); }
+          return;
+        }
         const th = e.target.closest('[data-theme-set]');
         if (th) { const v = th.dataset.themeSet; if (v === 'auto') delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = v; try { localStorage.setItem('al-hagesher-theme', v); } catch (err) { } A.refresh(); return; }
         const b = e.target.closest('[data-act]'); if (!b) return;
@@ -117,9 +136,11 @@
     if (!S) return '';
     if (!S.enabled()) return `<div class="card section cables"><div class="card-h"><h3>${A.icon('cloud')}סנכרון בין הטלפון למחשב</h3><span class="sync-pill off">${A.icon('cloud')}כבוי</span></div>
       <p style="margin-top:0">כשהסנכרון פעיל, כל מתכון, הזמנה או שינוי מחיר מופיעים בכל המכשירים שלך תוך שניות — וגם משמשים גיבוי בענן. עובד גם בלי אינטרנט: השינויים נשמרים ונשלחים כשהחיבור חוזר.</p>
-      <div class="row"><button class="btn" data-act="syncEnable">${A.icon('cloud')}הפעלת סנכרון במכשיר הזה</button>
-      <button class="btn ghost" data-act="syncJoin">יש לי כבר קוד ממכשיר אחר</button></div>
-      <p class="small muted" style="margin-bottom:0">מפעילים פעם אחת במכשיר הראשי, ואז מחברים את הטלפון עם הקישור או קוד ה־QR שיופיע כאן.</p></div>`;
+      ${A.platform() === 'desktop' ? `<div class="row"><button class="btn" data-act="syncEnable">${A.icon('cloud')}הפעלת סנכרון — זה המכשיר הראשון</button>
+      <button class="btn ghost" data-act="syncJoin">כבר הפעלתי במכשיר אחר — חיבור</button></div>`
+      : `<div class="row"><button class="btn" data-act="syncJoin">${A.icon('link')}חיבור למחשב / למכשיר אחר</button>
+      <button class="btn ghost" data-act="syncEnable">זה המכשיר הראשון שלי</button></div>`}
+      <p class="small muted" style="margin-bottom:0"><b>חשוב:</b> מפעילים סנכרון רק במכשיר אחד. בכל שאר המכשירים בוחרים "חיבור" וסורקים את קוד ה־QR שמופיע במכשיר הראשון (או מדביקים את קוד השחזור).</p></div>`;
     const c = S.cfg(), link = S.pairLink();
     return `<div class="card section cables"><div class="card-h"><h3>${A.icon('cloud')}סנכרון בין הטלפון למחשב</h3><a data-sync-status class="sync-pill"></a></div>
       <div class="grid g2" style="align-items:start">
@@ -128,7 +149,12 @@
           ${link ? `<div class="row"><button class="btn sm" data-act="syncCopyLink">${A.icon('copy')}העתקת קישור חיבור</button><a class="btn sm wa" target="_blank" rel="noopener" href="${U.wa('', 'קישור לחיבור האפליקציה של על הגשר (אישי — לא להעביר): ' + link)}">${A.icon('msg')}שליחה לעצמי</a></div>` : ''}
           <div class="row"><button class="btn sm ghost" data-act="syncCopyCode">${A.icon('copy')}העתקת קוד הסנכרון</button><button class="btn sm ghost" data-act="syncNow">סנכרון עכשיו</button></div>
           <div class="notice" style="margin-top:6px">${A.icon('alert')}<div>הקישור והקוד הם המפתח לנתונים שלך — אל תשלחי אותם לאף אחד אחר.</div></div>
+          <div class="card flat" style="padding:12px"><b>${A.icon('heart', 'inl')} קוד שחזור — לשמור במקום בטוח</b>
+            <p class="small" style="margin:6px 0">אם הטלפון יוחלף, יתאפס או שהדפדפן ימחק נתונים — עם הקוד הזה הכל חוזר, בכל מכשיר. שמרי אותו בצ׳אט עם עצמך או בפתק.</p>
+            <div dir="ltr" style="font-family:ui-monospace,Menlo,monospace;font-size:.82rem;word-break:break-all;background:var(--sand-2);padding:8px;border-radius:8px">${U.esc(c.code)}</div>
+            <div class="row" style="margin-top:8px"><a class="btn sm wa" target="_blank" rel="noopener" href="${U.wa('', 'קוד השחזור של אפליקציית על הגשר (אישי — לא להעביר):\n' + c.code + '\nלשחזור: באפליקציה ← הגדרות ← "יש לי כבר קוד ממכשיר אחר".')}">${A.icon('msg')}שמירה בוואטסאפ לעצמי</a></div></div>
           <p class="small muted" style="margin:0">מכשיר זה: ${U.esc(c.device || '')} · גרסה ${c.version || 0}</p>
+          <details id="histBox"><summary style="cursor:pointer;font-weight:600">${A.icon('clock', 'inl')} גרסאות קודמות בענן</summary><div id="histList" class="small muted" style="margin-top:8px">טוען…</div></details>
           <button class="btn sm danger" data-act="syncOff" style="align-self:flex-start">ניתוק המכשיר הזה מהסנכרון</button>
         </div>
         ${link ? `<div style="text-align:center"><div class="qr" id="syncQr"></div><div class="small muted" style="margin-top:6px">סריקה בטלפון = חיבור</div></div>` : `<div class="notice info">${A.icon('alert')}<div>כדי לחבר טלפון, פתחי את האפליקציה מהכתובת שלה באינטרנט (לא מקובץ במחשב) — שם יופיע קוד QR.</div></div>`}
@@ -147,6 +173,7 @@
   async function syncAction(act, b) {
     const S = A.sync;
     if (act === 'syncEnable') {
+      if (!await A.confirm('להפעיל סנכרון חדש מהמכשיר הזה?<br><br><b>אם כבר הפעלת סנכרון במחשב או בטלפון אחר — לחצי "ביטול" ובחרי "חיבור"</b>, אחרת המכשירים לא יראו זה את זה.', 'כן, זה המכשיר הראשון', false)) return;
       b.disabled = true; b.textContent = 'מפעילה…';
       const ok = await S.enable();
       A.refresh(); A.toast(ok ? 'הסנכרון פעיל ☁️' : 'לא הצלחתי להתחבר — בדקי אינטרנט ונסי שוב');

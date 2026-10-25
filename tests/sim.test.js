@@ -250,4 +250,34 @@ t('ניקוי אוטומטי של נתוני דוגמה ישנים', () => {
   assert.strictEqual(st.orders[0].items[0].recipeId, 'lib-challah', 'הזמנה אמיתית נשארת מקושרת');
   A.state = save;
 });
+t('זיהוי מכשיר ריק (לשחזור מהענן בלי לדרוס נתונים)', () => {
+  const st = A.normalize(null); A.seed.catalog(st); const save = A.state; A.state = st; A.seed.library(st);
+  assert.ok(A.isFreshState(st), 'מכשיר חדש עם מתכוני בסיס נחשב ריק');
+  st.wheel.entries.push({ id: 'w', date: U.today(), scores: [5, 5, 5, 5, 5, 5, 5, 5] }); assert.ok(!A.isFreshState(st), 'צ׳ק־אין = לא ריק');
+  st.wheel.entries = []; st.recipes.push({ id: 'mine', name: 'שלי', ingredients: [] }); assert.ok(!A.isFreshState(st), 'מתכון שלי = לא ריק');
+  A.state = save;
+});
+t('מכשיר עם גרסה ישנה לא מוחק חלקים שלמים מהענן', () => {
+  const base = A.normalize(null); base.form.enabled = true; base.form.slug = 'abc123'; base.orders.push({ id: 'o1', num: 1, items: [] });
+  const local = JSON.parse(JSON.stringify(base));
+  const oldRemote = JSON.parse(JSON.stringify(base)); delete oldRemote.form; delete oldRemote.orders;
+  const m = A.syncMerge(base, local, oldRemote);
+  assert.strictEqual(m.form.slug, 'abc123'); assert.strictEqual(m.orders.length, 1);
+});
+t('שדרוג מגרסה ישנה מאוד לא מאבד נתונים', () => {
+  // מצב כפי שנשמר בגרסה הראשונה: בלי טופס, בלי תשלום, בלי גרסת ספרייה
+  const old = { version: 1, settings: { businessName: 'על הגשר', hourlyRate: 55, nextOrderNum: 1003 }, ingredients: [{ id: 'i1', name: 'קמח לבן', pkgPrice: 6, pkgSize: 1, pkgUnit: 'kg', gramsPerCup: 140 }],
+    recipes: [{ id: 'r1', name: 'העוגה שלי', yield: 1, price: 90, ingredients: [{ ingId: 'i1', qty: 300, unit: 'g' }], times: { prep: 20 } }],
+    orders: [{ id: 'o1', num: 1001, customerName: 'לקוחה', date: '2025-01-01', status: 'delivered', items: [{ recipeId: 'r1', name: 'העוגה שלי', qty: 1, unitPrice: 90 }], paid: 90 }],
+    expenses: [{ id: 'e1', date: '2025-01-02', category: 'חומרי גלם', amount: 40 }], wheel: { entries: [{ id: 'w1', date: '2025-01-03', scores: [5, 5, 5, 5, 5, 5, 5, 5] }] } };
+  const st = A.normalize(JSON.parse(JSON.stringify(old)));
+  const save = A.state; A.state = st; A.seed.catalog(st); A.seed.library(st); if (A.seed.hasDemo(st)) A.seed.clearDemo(st);
+  assert.strictEqual(st.recipes.find(r => r.id === 'r1').name, 'העוגה שלי');
+  assert.strictEqual(st.orders.length, 1); assert.strictEqual(st.expenses.length, 1); assert.strictEqual(st.wheel.entries.length, 1);
+  assert.strictEqual(st.settings.hourlyRate, 55); assert.strictEqual(st.settings.nextOrderNum, 1003);
+  assert.ok(st.form && st.form.pay && st.form.days, 'נוספו ברירות מחדל לטופס');
+  assert.strictEqual(A.calc.orderTotals(st.orders[0]).total, 90);
+  assert.strictEqual(st.ingredients.filter(i => i.name === 'קמח לבן').length, 1, 'אין כפילות מצרכים');
+  A.state = save;
+});
 console.log(`\n${n} בדיקות עברו`);

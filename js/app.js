@@ -25,8 +25,10 @@
     main.onclick = main.oninput = main.onchange = main.onsubmit = null;
     A.setActions('');
     document.getElementById('pageTitle').textContent = typeof p.title === 'function' ? p.title(args) : p.title;
-    document.title = (typeof p.title === 'function' ? p.title(args) : p.title) + ' · על הגשר';
+    const t = typeof p.title === 'function' ? p.title(args) : p.title;
+    document.title = t === 'על הגשר' ? 'על הגשר' : t + ' · על הגשר';
     const navKey = page === 'recipe' ? 'recipes' : page;
+    document.body.classList.toggle('home', !page);
     document.querySelectorAll('[data-nav]').forEach(a => a.classList.toggle('active', a.dataset.nav === navKey));
     const fresh = A.state.orders.filter(o => o.status === 'new').length;
     document.querySelectorAll('[data-nav="orders"]').forEach(a => { let b = a.querySelector('.nav-badge'); if (!b) { b = document.createElement('i'); b.className = 'nav-badge'; a.appendChild(b); } b.textContent = fresh || ''; b.style.display = fresh ? '' : 'none'; });
@@ -67,6 +69,11 @@
     A.form && A.form.init();
     root.addEventListener('hashchange', () => { A.render(); root.scrollTo(0, 0); });
     A.render();
+    const splash = document.getElementById('splash');
+    if (splash) {
+      const t0 = performance.now(), fonts = document.fonts ? Promise.race([document.fonts.ready, new Promise(r => setTimeout(r, 1200))]) : Promise.resolve();
+      fonts.then(() => setTimeout(() => { splash.classList.add('done'); setTimeout(() => splash.remove(), 600); }, Math.max(0, 700 - (performance.now() - t0))));
+    }
     if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => { });
   };
   document.addEventListener('DOMContentLoaded', A.start);

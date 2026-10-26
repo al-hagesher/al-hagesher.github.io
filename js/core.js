@@ -237,7 +237,7 @@
   /* ---------- חישובים ---------- */
   A.saveHooks = A.saveHooks || [];
   // הכתובת הקבועה של האפליקציה באינטרנט (טופס ההזמנות וקישורי חיבור)
-  A.PUBLIC_BASE = 'https://hadasa055999-debug.github.io/al-hagesher/';
+  A.PUBLIC_BASE = 'https://al-hagesher.github.io/';
   const C = A.calc = {};
   C.ing = id => A.state.ingredients.find(i => i.id === id);
   C.recipe = id => A.state.recipes.find(r => r.id === id);

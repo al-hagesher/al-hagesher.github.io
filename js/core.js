@@ -12,7 +12,7 @@
   const nf = new Intl.NumberFormat('he-IL', { maximumFractionDigits: 2 });
   const nf0 = new Intl.NumberFormat('he-IL', { maximumFractionDigits: 0 });
   U.fmt = (n, d) => (d === 0 ? nf0 : nf).format(+n || 0);
-  U.money = (n, d) => '₪' + (d === 0 || Math.abs(n) >= 1000 ? nf0 : nf).format(U.round(n, 2));
+  U.money = (n, d) => { n = +n || 0; const v = (d === 0 || Math.abs(n) >= 1000 ? nf0 : nf).format(U.round(Math.abs(n), 2)); return (n < -0.004 ? '−' : '') + '₪' + v; };
   U.pct = n => nf0.format((+n || 0) * 100) + '%';
   U.pad = n => String(n).padStart(2, '0');
   U.iso = d => `${d.getFullYear()}-${U.pad(d.getMonth() + 1)}-${U.pad(d.getDate())}`;
@@ -107,6 +107,9 @@
   A.RECIPE_CATS = ['עוגות', 'עוגות שמרים', 'עוגיות', 'לחמים וחלות', 'מאפים מלוחים', 'קינוחים', 'עוגות מעוצבות', 'מארזים', 'בסיסים וקרמים', 'אחר'];
   A.ING_CATS = ['קמחים', 'סוכרים וממתיקים', 'מוצרי חלב', 'ביצים', 'שומנים ושמנים', 'שוקולד וקקאו', 'אגוזים וזרעים', 'תפיחה ושמרים', 'תבלינים ותמציות', 'ממרחים ומילויים', 'אריזות', 'אחר'];
   A.ALLERGENS = ['גלוטן', 'חלב', 'ביצים', 'אגוזים', 'בוטנים', 'שומשום', 'סויה'];
+  A.FREQS = { month: 'כל חודש', year: 'כל שנה', week: 'כל שבוע' };
+  // קנייה של חומרי גלם ואריזות כבר נכנסת לעלות של מה שנמכר (לפי המתכונים) — לא סופרים אותה פעמיים ברווח הנקי
+  A.STOCK_CATS = ['חומרי גלם', 'אריזות'];
   A.EXPENSE_CATS = ['חומרי גלם', 'אריזות', 'פחת ומוצרים שנזרקו', 'ציוד וכלים', 'שיווק ופרסום', 'משלוחים ונסיעות', 'חשמל וגז', 'השתלמויות', 'אחר'];
   A.WHEEL_AREAS = [
     { name: 'בריאות וגוף', hint: 'אנרגיה, שינה, תזונה, תנועה' },
@@ -138,9 +141,9 @@
       businessName: 'על הגשר', ownerName: '', phone: '', address: '',
       hourlyRate: 50, ovenCostPerHour: 4, targetMargin: 0.3,
       vatMode: 'exempt', vatRate: 0.18, nextOrderNum: 1001,
-      defaultDeliveryFee: 20, monthlyGoal: 0, lastBackup: null, orderFormUrl: ''
+      defaultDeliveryFee: 20, monthlyGoal: 0, monthlyHours: 60, includeFixed: true, lastBackup: null, orderFormUrl: ''
     },
-    ingredients: [], recipes: [], orders: [], expenses: [],
+    ingredients: [], recipes: [], orders: [], expenses: [], recurring: [],
     customers: {}, // הערות ופרטים נוספים לפי מפתח טלפון
     form: A.formDefaults(),
     wheel: { areas: A.WHEEL_AREAS.map(a => a.name), entries: [] },
@@ -173,7 +176,7 @@
     s = Object.assign(d, s || {});
     s.settings = Object.assign(A.defaults().settings, s.settings || {});
     s.wheel = Object.assign(A.defaults().wheel, s.wheel || {});
-    ['ingredients', 'recipes', 'orders', 'expenses'].forEach(k => { if (!Array.isArray(s[k])) s[k] = []; });
+    ['ingredients', 'recipes', 'orders', 'expenses', 'recurring'].forEach(k => { if (!Array.isArray(s[k])) s[k] = []; });
     if (!s.customers || typeof s.customers !== 'object') s.customers = {};
     const fd = A.formDefaults();
     s.form = Object.assign(fd, s.form || {});
@@ -277,9 +280,59 @@
     const labor = activeAll / 60 * (+settings.hourlyRate || 0);
     const overhead = ovenAll / 60 * (+settings.ovenCostPerHour || 0) + (+r.otherCost || 0);
     const direct = ingredients + packaging + overhead; // עלות ללא שכר עבודה
-    const total = direct + labor;
-    return { ingredients, packaging, labor, overhead, direct, total, perUnit: total / y, directPerUnit: direct / y, ingPerUnit: ingredients / y, missing, times: t, yield: y, activeAll, ovenAll };
+    // חלק יחסי מההוצאות הקבועות של העסק (לפי שעות עבודה)
+    const fixed = activeAll / 60 * C.fixedPerHour(settings);
+    const total = direct + labor + fixed;
+    return { ingredients, packaging, labor, overhead, fixed, direct, total, perUnit: total / y, directPerUnit: direct / y, ingPerUnit: ingredients / y, missing, times: t, yield: y, activeAll, ovenAll };
   };
+ /* ---------- הוצאות קבועות, פריסה ורווח והפסד ---------- */
+  const monthStart = ym => ym + '-01';
+  const monthEnd = ym => { const [y, m] = ym.split('-').map(Number); return U.iso(new Date(y, m, 0)); };
+  const toMonthly = (amount, freq) => (+amount || 0) * (freq === 'year' ? 1 / 12 : freq === 'week' ? 52 / 12 : 1);
+  // סך ההוצאות הקבועות לחודש מסוים (YYYY-MM): הוצאות חוזרות + ציוד שנפרס על כמה חודשים
+  C.monthlyFixed = (ym = U.today().slice(0, 7), state = A.state) => {
+    const s = monthStart(ym), e = monthEnd(ym), items = [];
+    (state.recurring || []).forEach(r => {
+      if (r.active === false) return;
+      if (r.start && r.start > e) return;
+      if (r.end && r.end < s) return;
+      const v = toMonthly(r.amount, r.freq); if (v) items.push({ name: r.name, amount: v, kind: 'recurring', ref: r });
+    });
+    (state.expenses || []).forEach(x => {
+      const n = +x.amortize || 0; if (n < 2) return;
+      const first = x.date.slice(0, 7);
+      const [fy, fm] = first.split('-').map(Number), [y, m] = ym.split('-').map(Number);
+      const idx = (y - fy) * 12 + (m - fm);
+      if (idx >= 0 && idx < n) items.push({ name: (x.desc || x.category) + ` (${idx + 1}/${n})`, amount: (+x.amount || 0) / n, kind: 'amortized', ref: x });
+    });
+    return { items, total: U.sum(items, i => i.amount), recurring: U.sum(items.filter(i => i.kind === 'recurring'), i => i.amount), amortized: U.sum(items.filter(i => i.kind === 'amortized'), i => i.amount) };
+  };
+  C.fixedPerHour = (settings = A.state.settings) => {
+    if (!A.state || settings.includeFixed === false) return 0;
+    const h = +settings.monthlyHours || 0; if (!(h > 0)) return 0;
+    return C.monthlyFixed(U.today().slice(0, 7)).total / h;
+  };
+  // דוח רווח והפסד לטווח חודשים (כולל)
+  C.pnl = (fromYm, toYm = fromYm, state = A.state) => {
+    const from = monthStart(fromYm), to = monthEnd(toYm);
+    const orders = state.orders.filter(o => o.status !== 'cancelled' && o.date >= from && o.date <= to);
+    const vf = C.vatFactor();
+    let revenue = 0, cogs = 0, minutes = 0;
+    orders.forEach(o => { const t = C.orderTotals(o); revenue += t.total; cogs += t.cost; minutes += t.activeMin; });
+    const net = revenue / vf, gross = net - cogs;
+    let fixed = 0; const months = [];
+    for (let ym = fromYm; ym <= toYm;) { months.push(ym); fixed += C.monthlyFixed(ym, state).total; const [y, m] = ym.split('-').map(Number); ym = U.iso(new Date(y, m, 1)).slice(0, 7); }
+    const otherList = state.expenses.filter(x => x.date >= from && x.date <= to && !(+x.amortize >= 2) && !A.STOCK_CATS.includes(x.category));
+    const other = U.sum(otherList, x => x.amount);
+    const stockBought = U.sum(state.expenses.filter(x => x.date >= from && x.date <= to && A.STOCK_CATS.includes(x.category)), x => x.amount);
+    const netProfit = gross - fixed - other;
+    const grossPerOrder = orders.length ? gross / orders.length : 0;
+    const breakEvenOrders = grossPerOrder > 0 ? Math.ceil((fixed + other) / grossPerOrder) : null;
+    const allExpenses = U.sum(state.expenses.filter(x => x.date >= from && x.date <= to && !(+x.amortize >= 2)), x => x.amount) + fixed;
+    return { from, to, months, orders: orders.length, revenue, net, cogs, gross, fixed, other, otherList, stockBought, netProfit, minutes, hours: minutes / 60,
+      perHour: minutes ? netProfit / (minutes / 60) : 0, margin: net ? netProfit / net : 0, grossPerOrder, breakEvenOrders, cash: revenue - allExpenses };
+  };
+
   C.vatFactor = (s = A.state.settings) => s.vatMode === 'licensed' ? 1 + (+s.vatRate || 0) : 1;
   C.pricing = (r, settings = A.state.settings) => {
     const c = C.recipeCost(r, settings);

@@ -59,7 +59,7 @@
         <div class="card kpi"><div class="lbl">${A.icon('orders')}להיום</div><div class="val">${todayO.length}</div><div class="sub">${tmrO.length} מחר · ${weekO.length} בהמשך השבוע</div></div>
         <div class="card kpi"><div class="lbl">${A.icon('calendar')}7 הימים הקרובים</div><div class="val">${U.money(weekRev, 0)}</div><div class="sub">הכנסות צפויות</div></div>
         <div class="card kpi"><div class="lbl">${A.icon('chart')}${U.MONTHS[d.getMonth()]}</div><div class="val">${U.money(month.revenue, 0)}</div>
-          ${goal ? `<div class="time-bar" style="height:7px;margin-top:6px"><i style="width:${Math.min(month.revenue / goal * 100, 100)}%;background:var(--brown-3)"></i></div><div class="sub">${U.pct(month.revenue / goal)} מהיעד (${U.money(goal, 0)})</div>` : `<div class="sub">${month.count} הזמנות · רווח ${U.money(month.profit, 0)}</div>`}</div>
+          ${goal ? `<div class="time-bar" style="height:7px;margin-top:6px"><i style="width:${Math.min(month.revenue / goal * 100, 100)}%;background:var(--brown-3)"></i></div><div class="sub">${U.pct(month.revenue / goal)} מהיעד (${U.money(goal, 0)})</div>` : `<div class="sub">${month.count} הזמנות · רווח נקי <a href="#/expenses">${U.money(C.pnl(today.slice(0, 7)).netProfit, 0)}</a></div>`}</div>
         <div class="card kpi"><div class="lbl">${A.icon('wallet')}ממתין לתשלום</div><div class="val ${unpaid ? 'bad' : ''}">${U.money(unpaid, 0)}</div><div class="sub"><a href="#/orders" data-unpaid>לרשימה</a></div></div>
       </div>
       <div class="grid cols-main">

@@ -23,6 +23,7 @@
             <label class="field"><span>שכר שעתי שלך (₪)</span><input type="number" min="0" step="any" name="hourlyRate" value="${s.hourlyRate}"><small>כמה שעת עבודה שלך שווה. נכנס לעלות כל מתכון.</small></label>
             <label class="field"><span>עלות תנור לשעה (₪)</span><input type="number" min="0" step="any" name="ovenCostPerHour" value="${s.ovenCostPerHour}"><small>חשמל/גז. תנור ביתי ≈ 2.5 קוט״ש × ~0.64 ₪ ≈ 1.6 ₪ + בלאי</small></label>
             <label class="field"><span>יעד רווח (%)</span><input type="number" min="0" max="90" step="1" name="targetMargin" value="${Math.round(s.targetMargin * 100)}"><small>מעל העלות המלאה כולל שכר. מקובל 25%–40%.</small></label>
+            <label class="field"><span>שעות עבודה בחודש (בערך)</span><input type="number" min="1" step="1" name="monthlyHours" value="${s.monthlyHours || 60}"><small>משמש לחלוקת ההוצאות הקבועות בין המתכונים</small></label>
             <label class="field"><span>יעד הכנסות חודשי (₪)</span><input type="number" min="0" step="100" name="monthlyGoal" value="${s.monthlyGoal || ''}"><small>יוצג כפס התקדמות בדף הבית</small></label>
             <label class="field"><span>דמי משלוח ברירת מחדל (₪)</span><input type="number" min="0" step="any" name="defaultDeliveryFee" value="${s.defaultDeliveryFee}"></label>
             <label class="field"><span>סוג עוסק</span><select name="vatMode">${A.opts([['exempt', 'עוסק פטור (בלי מע״מ)'], ['licensed', 'עוסק מורשה (מחירים כוללים מע״מ)']], s.vatMode)}</select></label>

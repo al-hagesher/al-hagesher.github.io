@@ -4,7 +4,7 @@
   A.pages = A.pages || {};
   const NAV = [
     ['', 'home', 'בית'], ['orders', 'orders', 'הזמנות'], ['recipes', 'book', 'מתכונים'], ['form', 'link', 'טופס הזמנות'], ['production', 'calendar', 'תכנון ייצור'],
-    ['pantry', 'box', 'מחסן ומחירים'], ['customers', 'users', 'לקוחות'], ['expenses', 'wallet', 'הוצאות'],
+    ['pantry', 'box', 'מחסן ומחירים'], ['customers', 'users', 'לקוחות'], ['expenses', 'wallet', 'הוצאות ורווחיות'],
     'sep', ['stats', 'chart', 'סטטיסטיקות'], ['wheel', 'wheel', 'גלגל החיים'], ['tools', 'scale', 'כלים וממירים'], ['settings', 'settings', 'הגדרות וגיבוי']
   ];
   const TABS = [['', 'home', 'בית'], ['orders', 'orders', 'הזמנות'], ['recipes', 'book', 'מתכונים'], ['stats', 'chart', 'נתונים']];

@@ -29,11 +29,11 @@
     [...(r || []), ...(l || [])].forEach(x => { if (x && m[x.id] && !seen.has(x.id)) { seen.add(x.id); out.push(m[x.id]); } });
     return out;
   };
-  const LISTS = ['ingredients', 'recipes', 'orders', 'expenses'];
+  const LISTS = ['ingredients', 'recipes', 'orders', 'expenses', 'recurring'];
   A.syncMerge = (base, local, remote) => {
     base = base || {}; local = U.clone(local); remote = U.clone(remote || {});
     // הגנה: מכשיר עם גרסה ישנה שלא מכירה חלק שלם (למשל טופס ההזמנות) לא ימחק אותו מהענן
-    ['ingredients', 'recipes', 'orders', 'expenses', 'settings', 'customers', 'form', 'wheel'].forEach(k => { if (remote[k] === undefined && base[k] !== undefined) remote[k] = U.clone(base[k]); });
+    ['ingredients', 'recipes', 'orders', 'expenses', 'recurring', 'settings', 'customers', 'form', 'wheel'].forEach(k => { if (remote[k] === undefined && base[k] !== undefined) remote[k] = U.clone(base[k]); });
     const out = A.normalize(local);
     LISTS.forEach(k => out[k] = mergeList(base[k], local[k], remote[k]));
     out.settings = mergeMap(base.settings, local.settings, remote.settings);

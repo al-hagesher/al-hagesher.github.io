@@ -280,4 +280,34 @@ t('שדרוג מגרסה ישנה מאוד לא מאבד נתונים', () => {
   assert.strictEqual(st.ingredients.filter(i => i.name === 'קמח לבן').length, 1, 'אין כפילות מצרכים');
   A.state = save;
 });
+t('הוצאות קבועות, פריסה ורווח והפסד', () => {
+  const st = A.normalize(null); const save = A.state; A.state = st; A.seed.catalog(st); A.seed.library(st);
+  st.settings.hourlyRate = 50; st.settings.monthlyHours = 50; st.settings.targetMargin = 0.3;
+  st.recurring.push({ id: 'r1', name: 'גז וחשמל', amount: 300, freq: 'month', category: 'חשמל וגז', start: '2026-01-01' },
+    { id: 'r2', name: 'ביטוח שנתי', amount: 1200, freq: 'year', category: 'אחר', start: '2026-01-01' },
+    { id: 'r3', name: 'ישן', amount: 999, freq: 'month', start: '2025-01-01', end: '2025-12-31' },
+    { id: 'r4', name: 'כבוי', amount: 999, freq: 'month', active: false });
+  st.expenses.push({ id: 'e1', date: '2026-09-10', category: 'ציוד וכלים', amount: 1200, desc: 'מיקסר', amortize: 12 },
+    { id: 'e2', date: '2026-10-05', category: 'שיווק ופרסום', amount: 150 },
+    { id: 'e3', date: '2026-10-06', category: 'חומרי גלם', amount: 500 });
+  const mf = A.calc.monthlyFixed('2026-10');
+  near(mf.recurring, 400); near(mf.amortized, 100); near(mf.total, 500);
+  near(A.calc.monthlyFixed('2027-09').amortized, 0, 0.01, 'הפריסה נגמרת אחרי 12 חודשים');
+  near(A.calc.monthlyFixed('2026-08').amortized, 0, 0.01, 'לפני הקנייה אין פריסה');
+  near(A.calc.fixedPerHour(), A.calc.monthlyFixed(U.today().slice(0, 7)).total / 50);
+  // ההוצאות הקבועות נכנסות לעלות המתכון ולמחיר המומלץ
+  const r = A.calc.recipe('lib-choc-cake'), c = A.calc.recipeCost(r);
+  near(c.fixed, c.activeAll / 60 * A.calc.fixedPerHour());
+  st.settings.includeFixed = false; const c2 = A.calc.recipeCost(r); near(c2.fixed, 0); assert.ok(c2.total < c.total || c.fixed === 0);
+  st.settings.includeFixed = true;
+  // רווח והפסד לאוקטובר: הזמנה אחת
+  st.orders.push({ id: 'o1', date: '2026-10-20', status: 'delivered', items: [{ recipeId: 'lib-choc-cake', name: 'עוגה', qty: 10, unitPrice: 85 }], paid: 850 });
+  const p = A.calc.pnl('2026-10');
+  near(p.revenue, 850); near(p.cogs, A.calc.recipeCost(r).directPerUnit * 10);
+  near(p.fixed, 500); near(p.other, 150, 0.01, 'חומרי גלם לא נספרים פעמיים, ציוד שנפרס לא נספר כהוצאה מלאה');
+  near(p.stockBought, 500); near(p.netProfit, p.gross - 650);
+  assert.ok(p.breakEvenOrders >= 1);
+  const q = A.calc.pnl('2026-09', '2026-10'); near(q.fixed, 400 + 100 + 400 + 100); assert.strictEqual(q.months.length, 2);
+  A.state = save;
+});
 console.log(`\n${n} בדיקות עברו`);

@@ -183,6 +183,7 @@
             <div class="cost-row"><span>חומרי גלם</span><span class="money">${U.money(p.ingredients)}</span></div>
             <div class="cost-row"><span>אריזה</span><span class="money">${U.money(p.packaging)}</span></div>
             <div class="cost-row"><span>תנור, גז ושונות</span><span class="money">${U.money(p.overhead)}</span></div>
+            ${p.fixed ? `<div class="cost-row"><span>חלק מההוצאות הקבועות <a href="#/expenses" class="small">(פירוט)</a></span><span class="money">${U.money(p.fixed)}</span></div>` : ''}
             <div class="cost-row"><span>שכר עבודה (${U.minutes(p.activeAll)}${p.activeAll > t.active ? ' כולל רכיבים' : ''} × ${U.money(s.hourlyRate)}/ש׳)</span><span class="money">${U.money(p.labor)}</span></div>
             <div class="cost-row total"><span>עלות מלאה למתכון</span><span class="money">${U.money(p.total)}</span></div>
             <div class="cost-row total" style="border-top:0;padding-top:4px;margin-top:0"><span>עלות ליחידה</span><span class="money">${U.money(p.perUnit)}</span></div>

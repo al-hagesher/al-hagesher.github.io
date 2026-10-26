@@ -88,7 +88,7 @@
         </div>
         <div class="grid g4 section">
           <div class="card kpi"><div class="lbl">הוצאות בפועל</div><div class="val">${U.money(exp, 0)}</div><div class="sub">מדף ההוצאות</div></div>
-          <div class="card kpi"><div class="lbl">תזרים (הכנסות − הוצאות)</div><div class="val ${st.revenue - exp >= 0 ? 'ok' : 'bad'}">${U.money(st.revenue - exp, 0)}</div></div>
+          ${(() => { const fy = r[0] === '0000-01-01' ? (A.state.orders.map(o => o.date).sort()[0] || U.today()).slice(0, 7) : r[0].slice(0, 7), ty = r[1] > U.today() ? U.today().slice(0, 7) : r[1].slice(0, 7); const pl = C.pnl(fy, ty < fy ? fy : ty); return `<div class="card kpi"><div class="lbl">רווח נקי (אחרי כל ההוצאות)</div><div class="val ${pl.netProfit >= 0 ? 'ok' : 'bad'}">${U.money(pl.netProfit, 0)}</div><div class="sub"><a href="#/expenses">דוח רווח והפסד</a></div></div>`; })()}
           <div class="card kpi"><div class="lbl">ממתין לתשלום</div><div class="val ${st.unpaid ? 'bad' : ''}">${U.money(st.unpaid, 0)}</div></div>
           <div class="card kpi"><div class="lbl">לקוחות חדשות</div><div class="val">${newCust}</div><div class="sub">מתוך ${custInPeriod.size} שהזמינו${avgLead != null ? ` · מזמינות ${U.fmt(U.round(avgLead, 1))} ימים מראש` : ''}</div></div>
         </div>

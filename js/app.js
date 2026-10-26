@@ -72,7 +72,10 @@
     const splash = document.getElementById('splash');
     if (splash) {
       const t0 = performance.now(), fonts = document.fonts ? Promise.race([document.fonts.ready, new Promise(r => setTimeout(r, 1200))]) : Promise.resolve();
-      fonts.then(() => setTimeout(() => { splash.classList.add('done'); setTimeout(() => splash.remove(), 600); }, Math.max(0, 700 - (performance.now() - t0))));
+      fonts.then(() => setTimeout(() => {
+        splash.classList.add('done'); setTimeout(() => splash.remove(), 650);
+        const tc = document.querySelector('meta[name="theme-color"]'); if (tc) tc.content = getComputedStyle(document.body).backgroundColor;
+      }, Math.max(0, 900 - (performance.now() - t0))));
     }
     if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => { });
   };

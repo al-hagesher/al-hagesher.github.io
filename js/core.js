@@ -12,7 +12,7 @@
   const nf = new Intl.NumberFormat('he-IL', { maximumFractionDigits: 2 });
   const nf0 = new Intl.NumberFormat('he-IL', { maximumFractionDigits: 0 });
   U.fmt = (n, d) => (d === 0 ? nf0 : nf).format(+n || 0);
-  U.money = (n, d) => { n = +n || 0; const v = (d === 0 || Math.abs(n) >= 1000 ? nf0 : nf).format(U.round(Math.abs(n), 2)); return (n < -0.004 ? '−' : '') + '₪' + v; };
+  U.money = (n, d) => { n = +n || 0; const v = (d === 0 || Math.abs(n) >= 1000 ? nf0 : nf).format(U.round(Math.abs(n), 2)); return n < -0.004 ? '\u2066−₪' + v + '\u2069' : '₪' + v; }; // מינוס בכיוון נכון גם בתוך טקסט עברי
   U.pct = n => nf0.format((+n || 0) * 100) + '%';
   U.pad = n => String(n).padStart(2, '0');
   U.iso = d => `${d.getFullYear()}-${U.pad(d.getMonth() + 1)}-${U.pad(d.getDate())}`;

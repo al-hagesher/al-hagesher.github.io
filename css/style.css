@@ -45,9 +45,9 @@
   --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 28px -14px rgba(0, 0, 0, .6);
   color-scheme: dark;
 }
-/* הלוגו החום הופך לבהיר במצב כהה */
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .brand img, :root:not([data-theme="light"]) .mini-logo, :root:not([data-theme="light"]) .print-logo { filter: invert(1) sepia(.35) saturate(1.4) hue-rotate(180deg) brightness(1.05); mix-blend-mode: screen; } }
-:root[data-theme="dark"] .brand img, :root[data-theme="dark"] .mini-logo { filter: invert(1) sepia(.35) saturate(1.4) hue-rotate(180deg) brightness(1.05); mix-blend-mode: screen; }
+/* במצב כהה — הלוגו בגרסת השמנת */
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .brand img, :root:not([data-theme="light"]) .hero-logo { content: url(../assets/logo-cream.png); } }
+:root[data-theme="dark"] .brand img, :root[data-theme="dark"] .hero-logo { content: url(../assets/logo-cream.png); }
 * { box-sizing: border-box; }
 html, body { margin: 0; }
 html { overflow-x: clip; }
@@ -71,32 +71,36 @@ svg.inl { width: 15px; height: 15px; vertical-align: -2px; }
 
 /* ---------- מסך פתיחה ---------- */
 #splash {
-  position: fixed; inset: 0; z-index: 1000; background: var(--cream); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 26px;
-  transition: opacity .5s ease, visibility .5s; animation: splashFailsafe 0s 5s forwards; /* אם משהו נתקע — נעלם לבד */
-}
-#splash::before {
-  content: ''; position: absolute; inset-inline-end: 0; top: 0; width: 70vw; height: 45vh; pointer-events: none; opacity: .07;
-  background: repeating-linear-gradient(35deg, transparent 0 18px, var(--brown) 18px 19px);
-  -webkit-mask-image: radial-gradient(circle at 100% 0, #000, transparent 70%); mask-image: radial-gradient(circle at 100% 0, #000, transparent 70%);
+  /* זהה למסך הפתיחה של הטלפון (assets/splash) — כך המעבר חלק, בלי "לוגו מודבק על דף לבן" */
+  position: fixed; inset: 0; z-index: 1000; overflow: hidden;
+  background: radial-gradient(ellipse 75% 60% at 50% 42%, #5a341c 0%, #3f2413 55%, #2e190c 100%);
+  transition: opacity .55s ease, visibility .55s; animation: splashFailsafe 0s 5s forwards;
 }
 #splash.done { opacity: 0; visibility: hidden; }
-#splash .splash-logo { width: min(240px, 60vw); mix-blend-mode: multiply; animation: splashIn 1s cubic-bezier(.2, .7, .2, 1) both; }
-#splash .splash-bar { width: 96px; height: 2px; border-radius: 2px; background: var(--line); overflow: hidden; position: relative; animation: splashIn 1s .25s both; }
-#splash .splash-bar::after { content: ''; position: absolute; top: 0; bottom: 0; width: 40%; background: var(--brown-3); border-radius: 2px; animation: splashBar 1.2s ease-in-out infinite; }
-@keyframes splashIn { from { opacity: 0; transform: translateY(10px) scale(.97); } to { opacity: 1; transform: none; } }
+#splash.done .splash-logo { transform: translate(-50%, -50%) scale(1.04); }
+#splash .splash-logo {
+  position: absolute; top: 42%; left: 50%; transform: translate(-50%, -50%); width: min(56vw, 340px);
+  transition: transform .55s ease; filter: drop-shadow(0 6px 24px rgba(0, 0, 0, .25));
+}
+/* ברק עדין שעובר על הלוגו */
+#splash .splash-shine {
+  position: absolute; top: 42%; left: 50%; transform: translate(-50%, -50%); width: min(56vw, 340px); aspect-ratio: 900 / 812; pointer-events: none;
+  -webkit-mask: url(../assets/logo-cream.png) center / contain no-repeat; mask: url(../assets/logo-cream.png) center / contain no-repeat;
+  background: linear-gradient(105deg, transparent 35%, rgba(255, 245, 230, .85) 50%, transparent 65%) -150% 0 / 250% 100% no-repeat;
+  animation: splashShine 1.6s .2s ease-in-out both;
+}
+#splash .splash-bar { position: absolute; left: 50%; bottom: calc(14% + env(safe-area-inset-bottom)); transform: translateX(-50%); width: 84px; height: 2px; border-radius: 2px; background: rgba(244, 232, 216, .18); overflow: hidden; }
+#splash .splash-bar::after { content: ''; position: absolute; top: 0; bottom: 0; width: 40%; background: #f4e8d8; border-radius: 2px; animation: splashBar 1.2s ease-in-out infinite; }
+@keyframes splashShine { to { background-position: 250% 0; } }
 @keyframes splashBar { from { right: -40%; } to { right: 100%; } }
 @keyframes splashFailsafe { to { opacity: 0; visibility: hidden; } }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) #splash .splash-logo { filter: invert(1) sepia(.35) saturate(1.4) hue-rotate(180deg) brightness(1.05); mix-blend-mode: screen; } }
-:root[data-theme="dark"] #splash .splash-logo { filter: invert(1) sepia(.35) saturate(1.4) hue-rotate(180deg) brightness(1.05); mix-blend-mode: screen; }
 
 /* כותרת הבית */
 .hero { display: flex; align-items: center; gap: 18px; padding: 22px 24px; }
-.hero .hero-logo { width: 120px; flex: none; mix-blend-mode: multiply; }
+.hero .hero-logo { width: 120px; flex: none; }
 .hero .hero-date { color: var(--muted); font-size: .9rem; }
 .hero h2 { font-size: 1.7rem; margin: 2px 0 6px; }
 .hero p { margin: 0; color: var(--ink); }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .hero-logo { filter: invert(1) sepia(.35) saturate(1.4) hue-rotate(180deg) brightness(1.05); mix-blend-mode: screen; } }
-:root[data-theme="dark"] .hero-logo { filter: invert(1) sepia(.35) saturate(1.4) hue-rotate(180deg) brightness(1.05); mix-blend-mode: screen; }
 
 /* ---------- מבנה ---------- */
 .app { display: flex; min-height: 100vh; }
@@ -105,7 +109,7 @@ svg.inl { width: 15px; height: 15px; vertical-align: -2px; }
   position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column; padding: 18px 14px; overflow-y: auto;
 }
 .brand { display: block; padding: 4px 18px 14px; border-bottom: 1px solid var(--line); margin-bottom: 10px; }
-.brand img { width: 100%; display: block; mix-blend-mode: multiply; }
+.brand img { width: 100%; display: block; }
 .nav a {
   display: flex; align-items: center; gap: 12px; padding: 9px 12px; border-radius: 10px; color: var(--ink);
   text-decoration: none; font-weight: 500; margin-bottom: 2px; transition: background .15s;
@@ -122,7 +126,10 @@ svg.inl { width: 15px; height: 15px; vertical-align: -2px; }
   display: flex; align-items: center; gap: 12px; padding: 16px 32px; border-bottom: 1px solid var(--line);
 }
 .topbar h1 { font-size: 1.7rem; flex: 1; }
-.topbar .mini-logo { display: none; height: 38px; mix-blend-mode: multiply; }
+/* אפליקציה מותקנת באייפון: התוכן מתחת לשורת המצב */
+.topbar { padding-top: max(16px, env(safe-area-inset-top)); }
+.sidebar { padding-top: max(18px, env(safe-area-inset-top)); }
+.topbar .mini-logo { display: none; height: 38px; border-radius: 9px; }
 #topActions { display: flex; gap: 8px; flex-wrap: wrap; }
 main { padding: 26px 32px 60px; max-width: 1280px; width: 100%; }
 .tabbar { display: none; }
@@ -414,7 +421,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: non
     position: fixed; inset-inline-start: 0; top: 0; z-index: 90; transform: translateX(105%); visibility: hidden; transition: transform .25s, visibility .25s; box-shadow: var(--shadow);
   }
   .sidebar.open { transform: none; visibility: visible; }
-  .topbar { padding: 10px 16px; }
+  .topbar { padding: 10px 16px; padding-top: max(10px, env(safe-area-inset-top)); }
   .topbar h1 { font-size: 1.35rem; }
   .topbar { flex-wrap: wrap; row-gap: 8px; }
   .topbar .btn { padding: 6px 10px; min-height: 34px; font-size: .85rem; }

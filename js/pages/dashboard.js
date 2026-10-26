@@ -49,7 +49,7 @@
       const weekCount = todayO.length + tmrO.length + weekO.length;
       const line = weekCount ? `${weekCount === 1 ? 'הזמנה אחת' : weekCount + ' הזמנות'} פתוחות השבוע · ${U.money(weekRev, 0)} צפוי` : 'השבוע עוד פנוי — זמן טוב ליצירה, לצילום ולמנוחה 🤎';
       main.innerHTML = `
-      <div class="card hero cables section"><img class="hero-logo" src="assets/logo.png" alt="על הגשר"><div><div class="hero-date">${dateTxt}</div><h2>${U.esc(greet)}</h2><p>${line}</p></div></div>
+      <div class="card hero cables section"><img class="hero-logo" src="assets/logo-brown.png" alt="על הגשר"><div><div class="hero-date">${dateTxt}</div><h2>${U.esc(greet)}</h2><p>${line}</p></div></div>
       ${first ? `<div class="card welcome section cables">
         <h2 style="margin-bottom:8px">ברוכה הבאה למערכת של על הגשר 🤎</h2>
         <p style="margin:0 0 14px;opacity:.9">כבר מחכים לך ${A.state.recipes.filter(r => r.library).length} מתכוני בסיס מדויקים בגרמים, מחסן עם ${A.state.ingredients.length} מצרכים ומחירים משוערים, ותמחור אוטומטי לכל מתכון. שלושה צעדים לפתיחה:</p>

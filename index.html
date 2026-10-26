@@ -4,37 +4,48 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>על הגשר · ניהול</title>
-  <meta name="theme-color" content="#4a2a16">
+  <meta name="theme-color" content="#3f2413">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob: https://al-hagesher.github.io; connect-src 'self' https://atyvnyfadjzedcdrrwpl.supabase.co; worker-src 'self'; base-uri 'none'; object-src 'none'">
   <meta name="referrer" content="no-referrer">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="על הגשר">
-  <link rel="icon" href="assets/icon.png">
+  <link rel="icon" href="assets/icon-192.png">
   <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <link rel="apple-touch-startup-image" media="screen and (device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="assets/splash/1290x2796.png">
+  <link rel="apple-touch-startup-image" media="screen and (device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="assets/splash/1179x2556.png">
+  <link rel="apple-touch-startup-image" media="screen and (device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="assets/splash/1284x2778.png">
+  <link rel="apple-touch-startup-image" media="screen and (device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="assets/splash/1170x2532.png">
+  <link rel="apple-touch-startup-image" media="screen and (device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="assets/splash/1125x2436.png">
+  <link rel="apple-touch-startup-image" media="screen and (device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="assets/splash/1242x2688.png">
+  <link rel="apple-touch-startup-image" media="screen and (device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" href="assets/splash/828x1792.png">
+  <link rel="apple-touch-startup-image" media="screen and (device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" href="assets/splash/750x1334.png">
+  <link rel="apple-touch-startup-image" media="screen and (device-width: 402px) and (device-height: 874px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="assets/splash/1206x2622.png">
+  <link rel="apple-touch-startup-image" media="screen and (device-width: 440px) and (device-height: 956px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="assets/splash/1320x2868.png">
   <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@400;500;700&family=Assistant:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css?v=202610261731">
-  <script src="js/theme.js?v=202610261731"></script>
+  <link rel="stylesheet" href="css/style.css?v=202610261843">
+  <script src="js/theme.js?v=202610261843"></script>
 </head>
 <body>
   <div id="splash" aria-hidden="true">
-    <img class="splash-logo" src="assets/logo.png" alt="">
+    <img class="splash-logo" src="assets/logo-cream.png" alt="">
+    <div class="splash-shine"></div>
     <div class="splash-bar"></div>
   </div>
   <div class="app">
     <aside class="sidebar" id="sidebar">
-      <a class="brand" href="#/" aria-label="על הגשר — בית"><img src="assets/logo.png" alt="על הגשר — מאפים, מתוקים ומעבר"></a>
+      <a class="brand" href="#/" aria-label="על הגשר — בית"><img src="assets/logo-brown.png" alt="על הגשר — מאפים, מתוקים ומעבר"></a>
       <nav class="nav" id="nav"></nav>
       <div class="side-foot"><a href="#/settings" data-sync-status class="sync-pill off"></a></div>
     </aside>
     <div class="scrim"></div>
     <div class="main-wrap">
       <header class="topbar">
-        <img class="mini-logo" src="assets/icon.png" alt="">
+        <img class="mini-logo" src="assets/icon-192.png" alt="">
         <h1 id="pageTitle">על הגשר</h1>
         <a href="#/settings" data-sync-status class="sync-pill off sync-top" aria-label="מצב סנכרון"></a>
         <div id="topActions"></div>
@@ -46,23 +57,23 @@
   <div id="toast" role="status"></div>
   <dialog id="modal"></dialog>
 
-  <script src="js/core.js?v=202610261731"></script>
-  <script src="js/seed.js?v=202610261731"></script>
-  <script src="js/library.js?v=202610261731"></script>
-  <script src="js/ui.js?v=202610261731"></script>
-  <script src="js/sync.js?v=202610261731"></script>
-  <script src="js/form.js?v=202610261731"></script>
-  <script src="js/pages/dashboard.js?v=202610261731"></script>
-  <script src="js/pages/recipes.js?v=202610261731"></script>
-  <script src="js/pages/pantry.js?v=202610261731"></script>
-  <script src="js/pages/orders.js?v=202610261731"></script>
-  <script src="js/pages/production.js?v=202610261731"></script>
-  <script src="js/pages/customers.js?v=202610261731"></script>
-  <script src="js/pages/expenses.js?v=202610261731"></script>
-  <script src="js/pages/stats.js?v=202610261731"></script>
-  <script src="js/pages/wheel.js?v=202610261731"></script>
-  <script src="js/pages/tools.js?v=202610261731"></script>
-  <script src="js/pages/settings.js?v=202610261731"></script>
-  <script src="js/app.js?v=202610261731"></script>
+  <script src="js/core.js?v=202610261843"></script>
+  <script src="js/seed.js?v=202610261843"></script>
+  <script src="js/library.js?v=202610261843"></script>
+  <script src="js/ui.js?v=202610261843"></script>
+  <script src="js/sync.js?v=202610261843"></script>
+  <script src="js/form.js?v=202610261843"></script>
+  <script src="js/pages/dashboard.js?v=202610261843"></script>
+  <script src="js/pages/recipes.js?v=202610261843"></script>
+  <script src="js/pages/pantry.js?v=202610261843"></script>
+  <script src="js/pages/orders.js?v=202610261843"></script>
+  <script src="js/pages/production.js?v=202610261843"></script>
+  <script src="js/pages/customers.js?v=202610261843"></script>
+  <script src="js/pages/expenses.js?v=202610261843"></script>
+  <script src="js/pages/stats.js?v=202610261843"></script>
+  <script src="js/pages/wheel.js?v=202610261843"></script>
+  <script src="js/pages/tools.js?v=202610261843"></script>
+  <script src="js/pages/settings.js?v=202610261843"></script>
+  <script src="js/app.js?v=202610261843"></script>
 </body>
 </html>

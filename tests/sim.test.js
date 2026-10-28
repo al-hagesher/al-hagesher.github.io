@@ -2,7 +2,7 @@
 const fs = require('fs'), path = require('path'), vm = require('vm'), assert = require('assert');
 const ctx = { console, Intl, TextEncoder, TextDecoder, btoa: s => Buffer.from(s, 'binary').toString('base64'), atob: s => Buffer.from(s, 'base64').toString('binary') };
 ctx.window = ctx; vm.createContext(ctx);
-['js/core.js', 'js/seed.js', 'js/library.js', 'js/sync.js', 'js/pages/production.js', 'tests/demo-fixture.js'].forEach(f => vm.runInContext(fs.readFileSync(path.join(__dirname, '..', f), 'utf8'), ctx, { filename: f }));
+['js/core.js', 'js/seed.js', 'js/library.js', 'js/sync.js', 'js/pages/production.js', 'tests/demo-fixture.js', 'js/video-plan.js', 'js/music.js'].forEach(f => vm.runInContext(fs.readFileSync(path.join(__dirname, '..', f), 'utf8'), ctx, { filename: f }));
 const A = ctx.App, U = A.util, C = A.calc;
 let n = 0; const t = (name, fn) => { fn(); n++; console.log('✓', name); };
 const near = (a, b, eps = 0.01, msg) => assert.ok(Math.abs(a - b) <= eps, `${msg || ''} expected ${b}, got ${a}`);
@@ -309,5 +309,26 @@ t('הוצאות קבועות, פריסה ורווח והפסד', () => {
   assert.ok(p.breakEvenOrders >= 1);
   const q = A.calc.pnl('2026-09', '2026-10'); near(q.fixed, 400 + 100 + 400 + 100); assert.strictEqual(q.months.length, 2);
   A.state = save;
+});
+t('מנוע עריכת הסרטונים: אורך מדויק, גבולות קליפים, כל הסגנונות', () => {
+  const clips = [{ duration: 12 }, { duration: 7.5 }, { duration: 20 }, { duration: 4 }, { duration: 9, hero: true }, { duration: 15 }];
+  for (const style of Object.keys(A.VIDEO_STYLES)) for (const target of [10, 15, 30, 45, 60]) for (const bpm of [null, 104, 152]) {
+    const p = A.planEdit(clips, { target, style, bpm });
+    near(p.total, target, 0.06, `${style} ${target}s bpm=${bpm} → ${p.total}`);
+    p.segments.forEach(s => {
+      const c = clips[s.clip];
+      assert.ok(s.start >= 0 && s.start + s.dur * s.speed <= c.duration + 0.01, `${style}/${target}: קטע מחוץ לקליפ`);
+      assert.ok(s.dur >= 0.3, 'קטע קצר מדי'); assert.ok(s.speed >= 0.5 && s.speed <= 2, 'מהירות סבירה');
+    });
+    assert.strictEqual(p.segments[p.segments.length - 1].clip, 4, 'מסתיים במוצר המוגמר');
+    if (target >= 30) { const used = new Set(p.segments.map(s => s.clip)); assert.strictEqual(used.size, clips.length, `${style}/${target}: כל הקליפים בשימוש`); }
+  }
+  const rec = A.planEdit(clips, { target: 30, style: 'recipe' });
+  assert.ok(rec.segments.some(s => s.caption === 'שלב 1'), 'כיתובי שלבים');
+  assert.strictEqual(rec.segments[0].role, 'hook', 'נפתח בהצצה לתוצאה');
+  // קליפ בודד וקצר — לא קורס
+  const one = A.planEdit([{ duration: 3 }], { target: 15, style: 'rhythm' }); near(one.total, 15, 0.06);
+  assert.strictEqual(A.planEdit([], { target: 15, style: 'calm' }).segments.length, 0);
+  assert.strictEqual(A.MUSIC.length, 10); assert.ok(A.MUSIC.every(m => m.src.includes('opengameart.org')));
 });
 console.log(`\n${n} בדיקות עברו`);

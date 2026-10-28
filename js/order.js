@@ -7,7 +7,9 @@
     const money = n => '₪' + nf.format(Math.round(n * 100) / 100);
     const pad = n => String(n).padStart(2, '0');
     // רק תמונות וקישורי https בטוחים
-    const safeImg = s => /^(data:image\/(png|jpe?g|webp|gif);base64,|https:\/\/|assets\/)/i.test(String(s || '')) ? String(s) : '';
+    // טפסים שפורסמו לפני המעבר לכתובת החדשה מפנים לתמונות בכתובת הישנה
+    const fixBase = s => String(s || '').replace(/^https:\/\/hadasa055999-debug\.github\.io\/al-hagesher\//, 'https://al-hagesher.github.io/');
+    const safeImg = s => (s = fixBase(s), /^(data:image\/(png|jpe?g|webp|gif);base64,|https:\/\/|assets\/)/i.test(s) ? s : '');
     const safeUrl = s => /^https:\/\//i.test(String(s || '')) ? String(s) : '';
     const iso = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
     const DAYS = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];

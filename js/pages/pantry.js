@@ -86,6 +86,7 @@
         <label class="field full"><span>ספק / איפה קונים</span><input name="supplier" value="${U.esc(d.supplier || '')}"></label>
         <div class="field full"><span>אלרגנים</span><div class="row">${A.ALLERGENS.map(a => `<label class="row" style="gap:5px"><input type="checkbox" name="allergens" data-multi="1" value="${a}" ${(d.allergens || []).includes(a) ? 'checked' : ''}>${a}</label>`).join('')}</div></div>
       </div>
+      ${(() => { const a = A.calc.avgPurchase(d); const ps = (d.purchases || []).slice().sort((x, y) => y.date.localeCompare(x.date)).slice(0, 6); return ps.length ? `<div class="card flat" style="padding:12px;margin-top:14px"><b>${A.icon('image', 'inl')} מקבלות: ממוצע ${U.money(a.perUnit)} ל${A.PKG_UNITS[d.pkgUnit] === 'יחידות' ? 'יחידה' : A.PKG_UNITS[d.pkgUnit]} (${a.count} קניות)</b><div class="small muted" style="margin-top:6px">${ps.map(p => `${U.fmtDate(p.date)} · ${U.fmt(U.round(p.qty, 2))} ${A.PKG_UNITS[d.pkgUnit]} · ${U.money(p.price)}`).join('<br>')}</div></div>` : ''; })()}
       ${used.length ? `<p class="small muted" style="margin-top:14px">משמש ב: ${used.map(r => `<a href="#/recipe/${r.id}" data-close>${U.esc(r.name)}</a>`).join(', ')}</p>` : ''}`,
       foot: `<button class="btn" data-save>${A.icon('check')}שמירה</button><button class="btn ghost" data-close>ביטול</button><span class="spacer"></span>${isNew ? '' : `<button class="btn danger" data-del>${A.icon('trash')}מחיקה</button>`}`,
       onMount(w) {

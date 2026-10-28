@@ -76,7 +76,7 @@
             <div class="grid g2 qa" style="gap:8px">
               <button class="btn soft" data-act="newOrder">${A.icon('orders')}הזמנה</button>
               <button class="btn soft" data-act="newRecipe">${A.icon('book')}מתכון</button>
-              <a class="btn soft" href="#/tools">${A.icon('scale')}ממיר</a>
+              <button class="btn soft" data-act="receipt">${A.icon('image')}קבלה</button>
               <a class="btn soft" href="#/wheel">${A.icon('wheel')}גלגל החיים</a>
             </div></div>
           ${lastWheel ? (() => { const e = A.state.wheel.entries.find(x => x.date === lastWheel); return e && e.focus ? `<div class="card cables"><div class="muted small">הצעד שבחרת בגלגל החיים</div><p style="font-family:var(--serif);font-size:1.2rem;color:var(--brown);margin:6px 0 0">${U.esc(e.focus)}</p></div>` : ''; })() : ''}
@@ -88,6 +88,7 @@
         const b = e.target.closest('[data-act]'); if (!b) return;
         if (b.dataset.act === 'newOrder') A.editOrder();
         if (b.dataset.act === 'newRecipe') A.editRecipe();
+        if (b.dataset.act === 'receipt') A.openReceipt();
         if (b.dataset.act === 'dismiss') { s.welcomeDone = true; A.commit(); return; }
       };
       main.onclick = act;

@@ -10,7 +10,7 @@
     title: 'הוצאות ורווחיות',
     render(main) {
       const ym = view.ym = view.ym || U.today().slice(0, 7);
-      A.setActions(`<button class="btn ghost" data-act="newFixed">${A.icon('clock')}הוצאה קבועה</button><button class="btn" data-act="new">${A.icon('plus')}הוצאה</button>`);
+      A.setActions(`<button class="btn ghost" data-act="newFixed">${A.icon('clock')}הוצאה קבועה</button><button class="btn ghost" data-act="new">${A.icon('plus')}הוצאה</button><button class="btn" data-act="receipt">${A.icon('image')}קבלה</button>`);
       const head = `<div class="row section between">
           <div class="row" style="gap:4px"><button class="icon-btn" data-mon="-1" aria-label="חודש קודם">${A.icon('right')}</button><h3 style="min-width:120px;text-align:center">${ymLabel(ym)}</h3><button class="icon-btn" data-mon="1" aria-label="חודש הבא">${A.icon('left')}</button></div>
           <div class="seg scroll">${[['pnl', 'רווח והפסד'], ['fixed', 'הוצאות קבועות'], ['list', 'כל ההוצאות']].map(([v, l]) => `<button data-tab="${v}" class="${view.tab === v ? 'on' : ''}">${l}</button>`).join('')}</div></div>`;
@@ -23,6 +23,7 @@
         else if (b.dataset.r) editFixed(A.state.recurring.find(x => x.id === b.dataset.r));
         else if (b.dataset.act === 'new') edit();
         else if (b.dataset.act === 'newFixed') editFixed();
+        else if (b.dataset.act === 'receipt') A.openReceipt();
       };
       main.onchange = e => {
         const f = e.target;
@@ -31,7 +32,7 @@
       };
       document.getElementById('topActions').onclick = e => {
         const b = e.target.closest('[data-act]'); if (!b) return;
-        if (b.dataset.act === 'new') edit(); if (b.dataset.act === 'newFixed') editFixed();
+        if (b.dataset.act === 'new') edit(); if (b.dataset.act === 'newFixed') editFixed(); if (b.dataset.act === 'receipt') A.openReceipt();
       };
     }
   };
@@ -119,7 +120,7 @@
     const byCat = Object.entries(U.groupBy(list, e => e.category)).map(([k, v]) => ({ label: k, value: U.sum(v, e => e.amount) })).sort((a, b) => b.value - a.value);
     return `<div class="grid cols-main">
       <div class="card"><div class="card-h"><h3>הוצאות ב${ymLabel(ym)}</h3><b class="money">${U.money(total, 0)}</b></div>
-        ${list.length ? list.map(e => `<div class="list-item click" data-e="${e.id}"><div class="main"><div class="t">${U.esc(e.desc || e.category)} ${+e.amortize >= 2 ? `<span class="badge info">פריסה ל־${e.amortize} ח׳</span>` : ''}</div><div class="s">${U.fmtDate(e.date)} · ${U.esc(e.category)}</div></div><b class="money">${U.money(e.amount)}</b></div>`).join('')
+        ${list.length ? list.map(e => `<div class="list-item click" data-e="${e.id}"><div class="main"><div class="t">${U.esc(e.desc || e.category)} ${+e.amortize >= 2 ? `<span class="badge info">פריסה ל־${e.amortize} ח׳</span>` : ''}${e.receipt ? `<span class="badge">${A.icon('image', 'inl')} ${(e.items || []).length} פריטים</span>` : ''}</div><div class="s">${U.fmtDate(e.date)} · ${U.esc(e.category)}</div></div><b class="money">${U.money(e.amount)}</b></div>`).join('')
           : `<div class="empty"><h3>אין הוצאות בחודש הזה</h3><p>תעדי קניות, ציוד ושיווק — כדי לדעת כמה באמת נשאר לך.</p><button class="btn" data-act="new">${A.icon('plus')}הוצאה חדשה</button></div>`}</div>
       <div class="card"><div class="card-h"><h3>לפי קטגוריה</h3></div>${A.chart.hbars(byCat, v => U.money(v, 0))}</div></div>`;
   }
@@ -134,6 +135,7 @@
         <label class="field"><span>תאריך</span><input type="date" name="date" value="${d.date}"></label>
         <label class="field full"><span>קטגוריה</span><select name="category">${A.opts(A.EXPENSE_CATS, d.category)}</select></label>
         <label class="field full"><span>תיאור</span><input name="desc" value="${U.esc(d.desc)}" placeholder="למשל: מיקסר / קניות בסיטונאי"></label>
+        ${d.receipt ? `<div class="field full"><span>פריטים בקבלה</span><div class="small">${(d.items || []).map(i => `${U.esc(i.text || (C.ing(i.ingId) || {}).name || '')} · ${U.fmt(i.qty)} ${U.esc(i.unit === 'unit' ? 'יח׳' : A.UNITS[i.unit] || '')} · ${U.money(i.price)}${i.ingId ? ' ✓' : ''}`).join('<br>')}</div>${d.image ? `<img src="${A.safeImg(d.image)}" alt="הקבלה" style="max-width:100%;max-height:260px;border-radius:8px;margin-top:8px">` : ''}<small>מחיקת הקבלה מבטלת גם את עדכון המלאי והמחירים.</small></div>` : ''}
         <label class="field full"><span>פריסה לחודשים (לקנייה גדולה)</span><input type="number" min="0" max="60" step="1" name="amortize" value="${d.amortize || ''}" placeholder="למשל 12 — ריק = הוצאה רגילה"><small>מיקסר ב־1,200 ₪ בפריסה ל־12 = 100 ₪ בכל חודש ברווח והפסד.</small></label></div>`,
       foot: `<button class="btn" data-save>${A.icon('check')}שמירה</button><button class="btn ghost" data-close>ביטול</button><span class="spacer"></span>${x ? `<button class="btn danger" data-del aria-label="מחיקה">${A.icon('trash')}</button>` : ''}`,
       onMount(w) {
@@ -146,7 +148,15 @@
             if (x) Object.assign(x, v, { demo: false }); else A.state.expenses.push(Object.assign({ id: U.uid() }, v));
             A.closeModal(); A.commit('נשמר');
           }
-          if (e.target.closest('[data-del]')) { A.state.expenses = A.state.expenses.filter(y => y !== x); A.closeModal(); A.commit(); A.undoToast('ההוצאה נמחקה', () => { A.state.expenses.push(x); A.commit(); }); }
+          if (e.target.closest('[data-del]')) {
+            if (x.receipt) A.removePurchasesFor(x.id);
+            A.state.expenses = A.state.expenses.filter(y => y !== x); A.closeModal(); A.commit();
+            A.undoToast(x.receipt ? 'הקבלה נמחקה (והמלאי/המחירים חזרו)' : 'ההוצאה נמחקה', () => {
+              A.state.expenses.push(x);
+              if (x.receipt) (x.items || []).filter(i => i.ingId).forEach(i => { const ing = C.ing(i.ingId); if (ing) try { A.recordPurchase(ing, { date: x.date, qty: i.qty, unit: i.unit, price: i.price, expenseId: x.id }); } catch (err) { } });
+              A.commit();
+            });
+          }
         });
       }
     });

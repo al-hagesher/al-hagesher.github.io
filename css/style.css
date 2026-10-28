@@ -306,6 +306,9 @@ tfoot td { font-weight: 700; border-top: 2px solid var(--line-2); }
 /* עורך מצרכים במתכון */
 .line-row { display: grid; grid-template-columns: minmax(0, 2.2fr) 90px 100px minmax(0, 1.2fr) 34px; gap: 8px; align-items: center; margin-bottom: 8px; }
 .line-row.head { font-size: .78rem; color: var(--muted); font-weight: 600; margin-bottom: 4px; }
+.rc-row { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1.4fr) 170px 90px 34px; gap: 8px; align-items: center; margin-bottom: 8px; }
+.rc-row.head { margin-bottom: 4px; font-weight: 600; }
+@media (max-width: 860px) { .rc-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); padding: 8px; border: 1px solid var(--line); border-radius: 10px; } .rc-row.head { display: none; } .rc-row > :nth-child(5) { justify-self: end; } }
 .item-row { display: grid; grid-template-columns: minmax(0, 2.4fr) 80px 100px 90px 34px; gap: 8px; align-items: center; margin-bottom: 8px; }
 
 /* מצב בישול */

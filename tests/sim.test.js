@@ -2,7 +2,7 @@
 const fs = require('fs'), path = require('path'), vm = require('vm'), assert = require('assert');
 const ctx = { console, Intl, TextEncoder, TextDecoder, btoa: s => Buffer.from(s, 'binary').toString('base64'), atob: s => Buffer.from(s, 'base64').toString('binary') };
 ctx.window = ctx; vm.createContext(ctx);
-['js/core.js', 'js/seed.js', 'js/library.js', 'js/sync.js', 'js/pages/production.js', 'tests/demo-fixture.js', 'js/video-plan.js', 'js/music.js'].forEach(f => vm.runInContext(fs.readFileSync(path.join(__dirname, '..', f), 'utf8'), ctx, { filename: f }));
+['js/core.js', 'js/seed.js', 'js/library.js', 'js/sync.js', 'js/pages/production.js', 'tests/demo-fixture.js', 'js/video-plan.js', 'js/music.js', 'js/receipts.js'].forEach(f => vm.runInContext(fs.readFileSync(path.join(__dirname, '..', f), 'utf8'), ctx, { filename: f }));
 const A = ctx.App, U = A.util, C = A.calc;
 let n = 0; const t = (name, fn) => { fn(); n++; console.log('✓', name); };
 const near = (a, b, eps = 0.01, msg) => assert.ok(Math.abs(a - b) <= eps, `${msg || ''} expected ${b}, got ${a}`);
@@ -330,5 +330,51 @@ t('מנוע עריכת הסרטונים: אורך מדויק, גבולות קל�
   const one = A.planEdit([{ duration: 3 }], { target: 15, style: 'rhythm' }); near(one.total, 15, 0.06);
   assert.strictEqual(A.planEdit([], { target: 15, style: 'calm' }).segments.length, 0);
   assert.strictEqual(A.MUSIC.length, 10); assert.ok(A.MUSIC.every(m => m.src.includes('opengameart.org')));
+});
+t('קבלות: פענוח, התאמה למצרכים, מחיר ממוצע, מלאי וביטול', () => {
+  const st = A.normalize(null); const save = A.state; A.state = st; A.seed.catalog(st);
+  const text = `רמי לוי שיווק השקמה
+תאריך 27/10/26 12:41
+קמח לבן 1 ק"ג            5.90
+2 x 6.50 חמאה 200 גרם    13.00
+ביצים L 12 יח            14.90
+שוקולד מריר 100 גר         6.90
+שקית ניילון              0.10
+סה"כ לתשלום             40.80
+אשראי                   40.80`;
+  const r = A.parseReceipt(text);
+  assert.strictEqual(r.store, 'רמי לוי שיווק השקמה'); assert.strictEqual(r.date, '2026-10-27'); near(r.total, 40.8);
+  assert.strictEqual(r.items.length, 5, JSON.stringify(r.items.map(i => i.text)));
+  const flour = r.items.find(i => i.text.includes('קמח')), butter = r.items.find(i => i.text.includes('חמאה'));
+  near(flour.price, 5.9); assert.deepStrictEqual(JSON.parse(JSON.stringify(flour.size)), { qty: 1, unit: 'kg' });
+  near(butter.qty, 2); near(butter.price, 13); assert.strictEqual(butter.size.unit, 'g');
+  const eggs = r.items.find(i => i.text.includes('ביצים')); assert.deepStrictEqual(JSON.parse(JSON.stringify(eggs.size)), { qty: 12, unit: 'unit' }, 'מארז 12 ביצים');
+  const lost = A.parseReceipt('רמי לוי\n28/10/26\nביצים 12 ]יח1490\nסה"כ לתשלום14.90');
+  assert.strictEqual(lost.items.length, 1, 'שורה שאיבדה נקודה עשרונית'); assert.strictEqual(lost.items[0].price, 14.9); assert.strictEqual(lost.total, 14.9); assert.strictEqual(lost.date, '2026-10-28');
+  // התאמה
+  assert.strictEqual(A.matchIngredient('קמח לבן קג').ing.name, 'קמח לבן');
+  assert.strictEqual(A.matchIngredient('חמאה גרם').ing.name, 'חמאה');
+  assert.strictEqual(A.matchIngredient('שוקולד מריר גר').ing.name, 'שוקולד מריר');
+  assert.strictEqual(A.matchIngredient('שקית ניילון'), null);
+  A.learnMatch('קמח מיוחד בייקרי', st.ingredients.find(i => i.name === 'קמח לבן').id);
+  assert.ok(A.matchIngredient('קמח מיוחד בייקרי').learned, 'זוכר התאמה שנבחרה');
+  // מחיר ממוצע משוקלל: קמח 1kg ב-5.90 ואז 5kg ב-25 → (5.9+25)/6 = 5.15 לק"ג
+  const fl = st.ingredients.find(i => i.name === 'קמח לבן'); fl.stock = 0;
+  A.recordPurchase(fl, { date: U.addDays(U.today(), -10), qty: 1, unit: 'kg', price: 5.9, expenseId: 'e1' });
+  A.recordPurchase(fl, { date: U.today(), qty: 5000, unit: 'g', price: 25, expenseId: 'e2' });
+  near(fl.pkgPrice, 30.9 / 6 * fl.pkgSize); assert.strictEqual(fl.estimated, false); near(fl.stock, 6);
+  // ביצים: יחידות
+  const eg = st.ingredients.find(i => i.name === 'ביצים L'); A.recordPurchase(eg, { qty: 12, unit: 'unit', price: 14.9, expenseId: 'e1' }); near(eg.pkgPrice, 14.9 / 12 * 12);
+  // ביטול קבלה e2: המחיר חוזר לפי e1 והמלאי יורד
+  A.removePurchasesFor('e2'); near(fl.pkgPrice, 5.9 * fl.pkgSize); near(fl.stock, 1);
+  // קנייה ביחידה שאי אפשר להמיר — שגיאה ברורה
+  const sug = st.ingredients.find(i => i.name === 'סוכר לבן'); sug.gramsPerUnit = 0;
+  assert.throws(() => A.recordPurchase(sug, { qty: 2, unit: 'unit', price: 10 }), /לא ניתן להמיר/);
+  // ישנות: יותר מ-180 יום לא נספרות כשיש לפחות 3 חדשות
+  const oil = st.ingredients.find(i => i.name === 'שמן קנולה');
+  A.recordPurchase(oil, { date: U.addDays(U.today(), -400), qty: 1, unit: 'l', price: 100 });
+  [1, 2, 3].forEach(k => A.recordPurchase(oil, { date: U.addDays(U.today(), -k), qty: 1, unit: 'l', price: 10 }));
+  near(A.calc.avgPurchase(oil).perUnit, 10);
+  A.state = save;
 });
 console.log(`\n${n} בדיקות עברו`);

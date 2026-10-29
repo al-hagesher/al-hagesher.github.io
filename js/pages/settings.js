@@ -128,7 +128,7 @@
     const el = document.getElementById('installQr'); if (!el) return;
     const draw = () => { el.innerHTML = ''; new root.QRCode(el, { text: A.PUBLIC_BASE, width: 360, height: 360, colorDark: '#4a2a16', colorLight: '#ffffff', correctLevel: root.QRCode.CorrectLevel.M }); };
     if (root.QRCode) return draw();
-    const s = document.createElement('script'); s.src = 'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js'; s.onload = draw; document.head.appendChild(s);
+    const s = document.createElement('script'); s.src = 'assets/vendor/qrcode.min.js'; s.onload = draw; document.head.appendChild(s);
   }
 
   /* ---------- סנכרון בין מכשירים ---------- */
@@ -166,7 +166,7 @@
     const link = A.sync.pairLink();
     const draw = () => { el.innerHTML = ''; new root.QRCode(el, { text: link, width: 360, height: 360, colorDark: '#4a2a16', colorLight: '#ffffff', correctLevel: root.QRCode.CorrectLevel.M }); };
     if (root.QRCode) return draw();
-    const s = document.createElement('script'); s.src = 'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js';
+    const s = document.createElement('script'); s.src = 'assets/vendor/qrcode.min.js';
     s.onload = draw; s.onerror = () => { el.innerHTML = '<span class="small muted">אין חיבור לטעינת QR — השתמשי בקישור</span>'; };
     document.head.appendChild(s);
   }

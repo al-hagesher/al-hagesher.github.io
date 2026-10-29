@@ -1,6 +1,6 @@
 /* על הגשר — עבודה גם בלי אינטרנט (כשהאפליקציה מותקנת מכתובת אינטרנט) */
-const CACHE = 'al-hagesher-202610282123';
-const FILES = ['./', 'index.html', 'order.html', 'css/style.css', 'assets/logo.png', 'assets/logo-brown.png', 'assets/logo-cream.png', 'assets/icon.png', 'assets/icon-192.png', 'assets/icon-512.png', 'assets/apple-touch-icon.png', 'manifest.webmanifest',
+const CACHE = 'al-hagesher-202610292134';
+const FILES = ['./', 'index.html', 'order.html', 'css/style.css', 'css/fonts.css', 'assets/fonts/Assistant-hebrew.woff2', 'assets/fonts/Assistant-latin.woff2', 'assets/fonts/FrankRuhlLibre-hebrew.woff2', 'assets/fonts/FrankRuhlLibre-latin.woff2', 'assets/fonts/Bellefair-hebrew.woff2', 'assets/fonts/Bellefair-latin.woff2', 'assets/vendor/qrcode.min.js', 'assets/logo.png', 'assets/logo-brown.png', 'assets/logo-cream.png', 'assets/icon.png', 'assets/icon-192.png', 'assets/icon-512.png', 'assets/apple-touch-icon.png', 'manifest.webmanifest',
   'js/theme.js', 'js/order.js', 'js/core.js', 'js/seed.js', 'js/library.js', 'js/ui.js', 'js/sync.js', 'js/receipts.js', 'js/video-plan.js', 'js/music.js', 'js/video-render.js', 'js/pages/video.js', 'js/form.js', 'js/app.js', 'js/pages/dashboard.js', 'js/pages/recipes.js', 'js/pages/pantry.js', 'js/pages/orders.js',
   'js/pages/production.js', 'js/pages/customers.js', 'js/pages/expenses.js', 'js/pages/stats.js', 'js/pages/wheel.js', 'js/pages/tools.js', 'js/pages/settings.js'];
 self.addEventListener('install', e => e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES.map(f => new Request(f, { cache: 'reload' })))).then(() => self.skipWaiting())));

@@ -299,7 +299,7 @@
     const el = document.getElementById('formQr'); if (!el || !link) return;
     const draw = () => { el.innerHTML = ''; new root.QRCode(el, { text: link, width: 360, height: 360, colorDark: '#4a2a16', colorLight: '#ffffff', correctLevel: root.QRCode.CorrectLevel.M }); };
     if (root.QRCode) return draw();
-    const s = document.createElement('script'); s.src = 'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js';
+    const s = document.createElement('script'); s.src = 'assets/vendor/qrcode.min.js';
     s.onload = draw; s.onerror = () => { el.innerHTML = '<span class="small muted">QR לא נטען</span>'; };
     document.head.appendChild(s);
   }

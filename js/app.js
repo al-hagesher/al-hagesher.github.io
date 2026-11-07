@@ -3,7 +3,7 @@
   const A = root.App, U = A.util;
   A.pages = A.pages || {};
   const NAV = [
-    ['', 'home', 'בית'], ['orders', 'orders', 'הזמנות'], ['recipes', 'book', 'מתכונים'], ['form', 'link', 'טופס הזמנות'], ['coupons', 'tag', 'קופונים'], ['production', 'calendar', 'תכנון ייצור'],
+    ['', 'home', 'בית'], ['assistant', 'spark', 'עוזרת AI'], ['orders', 'orders', 'הזמנות'], ['recipes', 'book', 'מתכונים'], ['form', 'link', 'טופס הזמנות'], ['coupons', 'tag', 'קופונים'], ['production', 'calendar', 'תכנון ייצור'],
     ['pantry', 'box', 'מחסן ומחירים'], ['customers', 'users', 'לקוחות'], ['expenses', 'wallet', 'הוצאות ורווחיות'],
     'sep', ['video', 'play', 'סטודיו סרטונים'], ['stats', 'chart', 'סטטיסטיקות'], ['wheel', 'wheel', 'גלגל החיים'], ['tools', 'scale', 'כלים וממירים'], ['settings', 'settings', 'הגדרות וגיבוי']
   ];

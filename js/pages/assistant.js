@@ -1,69 +1,307 @@
-/* על הגשר — עוזרת AI (Claude Opus 5.5 דרך Supabase Edge Function) */
+﻿/* על הגשר — עוזרת AI (Claude Opus 5.5 דרך Supabase Edge Function) */
 (function (root) {
   const A = root.App, U = A.util, C = A.calc, P = A.pages = A.pages || {};
 
   const EDGE_URL = 'https://atyvnyfadjzedcdrrwpl.supabase.co/functions/v1/assistant';
   const PUB_KEY = 'sb_publishable_VYxvnQePn2dITBiFCyEAhA_Og_aEgPR';
   const LS_KEY = 'ag-assistant-chat';
+  const CHAT_API_KEY = 'ag-assistant-api';
+  const MAX_TURNS = 8;
 
-  // היסטוריית שיחה נשמרת מקומית
   const loadChat = () => { try { return JSON.parse(localStorage.getItem(LS_KEY) || '[]'); } catch (e) { return []; } };
   const saveChat = m => { try { localStorage.setItem(LS_KEY, JSON.stringify(m.slice(-40))); } catch (e) { } };
+  const loadApiMessages = () => { try { return JSON.parse(localStorage.getItem(CHAT_API_KEY) || '[]'); } catch (e) { return []; } };
+  const saveApiMessages = m => { try { localStorage.setItem(CHAT_API_KEY, JSON.stringify(m.slice(-20))); } catch (e) { } };
 
-  // מצטמצם למצב רלוונטי בלבד (בלי תמונות/בייס64)
+  // saveState: שומר בלי לרענן את כל הדף (אחרת הצ'אט נשבר)
+  const saveState = (msg) => { A.save(); if (msg) A.toast(msg); };
+
+  /* ---------- Snapshot ל-System prompt ---------- */
   function stateSnapshot() {
     const s = A.state, today = U.today();
-    const slim = r => ({ id: r.id, name: r.name, category: r.category, yield: r.yield, yieldUnit: r.yieldUnit, price: r.price, ovenTemp: r.ovenTemp, times: r.times, tags: r.tags });
-    const slimIng = i => ({ id: i.id, name: i.name, category: i.category, pkgPrice: i.pkgPrice, pkgSize: i.pkgSize, pkgUnit: i.pkgUnit, stock: i.stock, minStock: i.minStock });
+    const slim = r => ({ id: r.id, name: r.name, category: r.category, yield: r.yield, yieldUnit: r.yieldUnit, price: r.price, tags: r.tags });
     const slimOrder = o => {
       const t = C.orderTotals(o);
-      return { id: o.id, num: o.num, customerName: o.customerName, phone: o.phone, date: o.date, time: o.time, method: o.method, status: o.status, items: (o.items || []).map(i => ({ name: i.name, qty: i.qty, unitPrice: i.unitPrice, description: i.description })), total: t.total, paid: t.paid, balance: t.balance, notes: o.notes, allergies: o.allergies, couponCode: o.couponCode };
+      return { id: o.id, num: o.num, customer: o.customerName, phone: o.phone, date: o.date, time: o.time, method: o.method, status: o.status, items: (o.items || []).map(i => i.qty + '× ' + i.name), total: t.total, balance: t.balance };
     };
-    const upcoming = s.orders.filter(o => o.date >= today && o.status !== 'cancelled').slice(0, 30).map(slimOrder);
-    const recent = s.orders.filter(o => o.date < today).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 10).map(slimOrder);
+    const upcoming = s.orders.filter(o => o.date >= today && o.status !== 'cancelled').slice(0, 20).map(slimOrder);
     return {
       today,
-      settings: { businessName: s.settings.businessName, hourlyRate: s.settings.hourlyRate, targetMargin: s.settings.targetMargin, defaultDeliveryFee: s.settings.defaultDeliveryFee },
-      recipes: s.recipes.map(slim),
-      ingredients: s.ingredients.map(slimIng),
-      orders: { upcoming, recent, totalCount: s.orders.length },
-      coupons: (s.coupons || []).map(c => ({ code: c.code, type: c.type, value: c.value, active: c.active, uses: c.uses, maxUses: c.maxUses }))
+      businessName: s.settings.businessName,
+      recipeCount: s.recipes.length,
+      ingredientCount: s.ingredients.length,
+      upcomingOrders: upcoming,
+      activeCouponCount: (s.coupons || []).filter(c => c.active !== false).length
     };
   }
 
   function systemPrompt() {
-    const snap = stateSnapshot();
-    return `את עוזרת ה-AI האישית של הדסה, בעלת מאפייה בשם "על הגשר". את עוזרת לה לנהל את העסק: הזמנות, מתכונים, מחסן, לקוחות, תמחור, קופונים וסטטיסטיקות.
+    return `את עוזרת ה-AI של הדסה, בעלת מאפייה "על הגשר". ממשק ניהול מלא עם מתכונים, הזמנות, מצרכים וקופונים.
 
 **איך לענות:**
-- בעברית, נעימה, ישירה וממוקדת. בלי בירבור.
-- ספציפית ומבוססת נתונים — ציטטי מספרי הזמנה, שמות מתכונים, סכומים ותאריכים מתוך הנתונים שלמטה.
-- כשחסר מידע, אמרי זאת במפורש במקום לנחש.
-- אם הדסה מבקשת ממך לבצע פעולה (למשל "תמחקי את ההזמנה של שרה") — כרגע עדיין אין לך הרשאה לכתיבה, אז תסבירי לה בדיוק מה לעשות ידנית.
+- בעברית, תמציתית וממוקדת.
+- השתמשי בכלים לקבל נתונים מעודכנים לפני תשובה — הסנאפשוט שלמטה חלקי בלבד.
+- כשמבקשים ממך לבצע פעולה, השתמשי בכלי המתאים. פעולות הרסניות ידרשו אישור של הדסה.
+- אם חסר מידע, בקשי אותו במפורש במקום לנחש.
 
-**תאריך היום:** ${snap.today}
+**תאריך היום:** ${new Date().toISOString().slice(0, 10)}
 
-**נתוני המערכת (snapshot מעודכן):**
+**Snapshot חלקי של המערכת:**
 \`\`\`json
-${JSON.stringify(snap, null, 2)}
+${JSON.stringify(stateSnapshot(), null, 2)}
 \`\`\``;
   }
 
-  async function sendMessage(messages) {
+  /* ---------- Tools ---------- */
+  const TOOLS = {
+    list_orders: {
+      description: 'רשימת הזמנות עם סינון. מחזיר מערך כולל פרטי כל פריט, תיאור, סטטוס ומצב תשלום.',
+      input_schema: { type: 'object', properties: {
+        status: { type: 'string', enum: ['new', 'confirmed', 'baking', 'ready', 'delivered', 'cancelled', 'any'] },
+        from_date: { type: 'string', description: 'YYYY-MM-DD' },
+        to_date: { type: 'string', description: 'YYYY-MM-DD' },
+        customer: { type: 'string', description: 'חיפוש לפי שם לקוח (חלקי)' }
+      } },
+      execute(args) {
+        let list = A.state.orders.slice();
+        if (args.status && args.status !== 'any') list = list.filter(o => o.status === args.status);
+        if (args.from_date) list = list.filter(o => o.date >= args.from_date);
+        if (args.to_date) list = list.filter(o => o.date <= args.to_date);
+        if (args.customer) list = list.filter(o => (o.customerName || '').includes(args.customer));
+        return JSON.stringify(list.slice(0, 50).map(o => {
+          const t = C.orderTotals(o);
+          return { id: o.id, num: o.num, customer: o.customerName, phone: o.phone, date: o.date, time: o.time, method: o.method, status: o.status, items: o.items, total: t.total, paid: t.paid, balance: t.balance, notes: o.notes, allergies: o.allergies, couponCode: o.couponCode };
+        }));
+      }
+    },
+
+    get_recipe: {
+      description: 'מידע מלא על מתכון לפי שם או ID (כולל מצרכים, שלבים, עלות ורווחיות).',
+      input_schema: { type: 'object', required: ['name_or_id'], properties: { name_or_id: { type: 'string' } } },
+      execute(args) {
+        const q = args.name_or_id;
+        const r = A.state.recipes.find(x => x.id === q) || A.state.recipes.find(x => (x.name || '').includes(q));
+        if (!r) return JSON.stringify({ error: 'לא נמצא מתכון בשם "' + q + '"' });
+        const p = C.pricing(r);
+        return JSON.stringify({
+          id: r.id, name: r.name, category: r.category, yield: r.yield, yieldUnit: r.yieldUnit,
+          price: r.price, times: r.times, ingredients: r.ingredients,
+          steps: (r.steps || []).map(s => typeof s === 'string' ? s : s.text),
+          cost: p.perUnit, suggestedPrice: p.suggested, margin: p.margin, profit: p.profit
+        });
+      }
+    },
+
+    recipes_by_profit: {
+      description: 'מתכונים ממוינים לפי אחוז רווח (יורד).',
+      input_schema: { type: 'object', properties: { limit: { type: 'integer' } } },
+      execute(args) {
+        const limit = args.limit || 10;
+        const list = A.state.recipes.filter(r => r.price > 0).map(r => {
+          const p = C.pricing(r);
+          return { name: r.name, price: r.price, costPerUnit: p.perUnit, profitPerUnit: p.profit, marginPct: Math.round(p.margin * 100) };
+        }).sort((a, b) => b.marginPct - a.marginPct).slice(0, limit);
+        return JSON.stringify(list);
+      }
+    },
+
+    low_stock: {
+      description: 'רשימת מצרכים שהכמות במחסן מתחת למינימום.',
+      input_schema: { type: 'object', properties: {} },
+      execute() {
+        const list = A.state.ingredients.filter(i => i.minStock > 0 && (i.stock || 0) < i.minStock)
+          .map(i => ({ name: i.name, category: i.category, stock: i.stock, minStock: i.minStock, missing: i.minStock - (i.stock || 0), unit: i.pkgUnit }));
+        return JSON.stringify(list.length ? list : { message: 'אין מצרכים חסרים כרגע' });
+      }
+    },
+
+    update_order_status: {
+      description: 'שינוי סטטוס להזמנה.',
+      input_schema: { type: 'object', required: ['order_id', 'status'], properties: {
+        order_id: { type: 'string' },
+        status: { type: 'string', enum: ['new', 'confirmed', 'baking', 'ready', 'delivered'] }
+      } },
+      execute(args) {
+        const o = A.state.orders.find(x => x.id === args.order_id || x.num == args.order_id);
+        if (!o) return JSON.stringify({ error: 'הזמנה לא נמצאה' });
+        const prev = o.status; o.status = args.status; saveState('סטטוס עודכן');
+        return JSON.stringify({ ok: true, order_num: o.num, from: prev, to: o.status });
+      }
+    },
+
+    update_order_notes: {
+      description: 'הוספה/עדכון של הערות על הזמנה.',
+      input_schema: { type: 'object', required: ['order_id', 'notes'], properties: {
+        order_id: { type: 'string' }, notes: { type: 'string' }
+      } },
+      execute(args) {
+        const o = A.state.orders.find(x => x.id === args.order_id || x.num == args.order_id);
+        if (!o) return JSON.stringify({ error: 'הזמנה לא נמצאה' });
+        o.notes = args.notes; saveState('הערות עודכנו');
+        return JSON.stringify({ ok: true, order_num: o.num });
+      }
+    },
+
+    add_item_to_order: {
+      description: 'הוספת פריט להזמנה. אם name תואם למתכון קיים — ימלא מחיר אוטומטית.',
+      input_schema: { type: 'object', required: ['order_id', 'name', 'qty'], properties: {
+        order_id: { type: 'string' }, name: { type: 'string' }, qty: { type: 'number' },
+        unit_price: { type: 'number' }, description: { type: 'string' }
+      } },
+      execute(args) {
+        const o = A.state.orders.find(x => x.id === args.order_id || x.num == args.order_id);
+        if (!o) return JSON.stringify({ error: 'הזמנה לא נמצאה' });
+        const r = A.state.recipes.find(x => x.name === args.name);
+        const unitPrice = args.unit_price != null ? args.unit_price : (r ? r.price : 0);
+        o.items.push({ recipeId: r ? r.id : null, name: args.name, qty: args.qty, unitPrice, description: args.description || '' });
+        saveState('פריט נוסף להזמנה');
+        return JSON.stringify({ ok: true, order_num: o.num, items_count: o.items.length });
+      }
+    },
+
+    create_coupon: {
+      description: 'יצירת קופון חדש.',
+      input_schema: { type: 'object', required: ['code', 'type', 'value'], properties: {
+        code: { type: 'string' },
+        type: { type: 'string', enum: ['percent', 'fixed'] },
+        value: { type: 'number' },
+        min_order: { type: 'number' },
+        max_uses: { type: 'integer' },
+        note: { type: 'string' }
+      } },
+      execute(args) {
+        const code = args.code.trim().toUpperCase();
+        if (A.state.coupons.some(c => c.code.toUpperCase() === code)) return JSON.stringify({ error: 'קוד כבר קיים' });
+        const c = { id: U.uid(), code, type: args.type, value: args.value, minOrder: args.min_order || 0, maxUses: args.max_uses || 0, uses: 0, active: true, note: args.note || '', from: '', to: '' };
+        A.state.coupons.push(c); saveState('קופון נוצר');
+        return JSON.stringify({ ok: true, code: c.code });
+      }
+    },
+
+    delete_order: {
+      approval: 'confirm',
+      description: 'מחיקת הזמנה לצמיתות (עדיף update_order_status ל-cancelled).',
+      input_schema: { type: 'object', required: ['order_id'], properties: { order_id: { type: 'string' } } },
+      execute(args) {
+        const o = A.state.orders.find(x => x.id === args.order_id || x.num == args.order_id);
+        if (!o) return JSON.stringify({ error: 'הזמנה לא נמצאה' });
+        A.state.orders = A.state.orders.filter(x => x !== o); saveState('הזמנה נמחקה');
+        return JSON.stringify({ ok: true, deleted_order_num: o.num });
+      }
+    },
+
+    delete_coupon: {
+      approval: 'confirm',
+      description: 'מחיקת קופון לצמיתות.',
+      input_schema: { type: 'object', required: ['code'], properties: { code: { type: 'string' } } },
+      execute(args) {
+        const code = args.code.trim().toUpperCase();
+        const c = A.state.coupons.find(x => x.code.toUpperCase() === code);
+        if (!c) return JSON.stringify({ error: 'קופון לא נמצא' });
+        A.state.coupons = A.state.coupons.filter(x => x !== c); saveState('קופון נמחק');
+        return JSON.stringify({ ok: true, deleted: code });
+      }
+    },
+
+    change_recipe_price: {
+      approval: 'confirm',
+      description: 'שינוי מחיר מתכון. פעולה רגישה — משפיע על תמחור ללקוחות.',
+      input_schema: { type: 'object', required: ['recipe_name', 'new_price'], properties: {
+        recipe_name: { type: 'string' }, new_price: { type: 'number' }
+      } },
+      execute(args) {
+        const r = A.state.recipes.find(x => (x.name || '').includes(args.recipe_name));
+        if (!r) return JSON.stringify({ error: 'מתכון לא נמצא' });
+        const prev = r.price; r.price = args.new_price; saveState('מחיר עודכן');
+        return JSON.stringify({ ok: true, recipe: r.name, from: prev, to: r.price });
+      }
+    }
+  };
+
+  const toolsForAPI = () => Object.entries(TOOLS).map(([name, def]) => ({ name, description: def.description, input_schema: def.input_schema }));
+
+  function approvalText(name, input) {
+    const descs = {
+      delete_order: `למחוק הזמנה #${input.order_id} לצמיתות? לא ניתן לשחזר.`,
+      delete_coupon: `למחוק את הקופון "${input.code}" לצמיתות?`,
+      change_recipe_price: `לשנות את המחיר של "${input.recipe_name}" ל-${U.money(+input.new_price)}?`
+    };
+    return descs[name] || `לבצע ${name}?`;
+  }
+
+  async function callApi(messages) {
     const r = await fetch(EDGE_URL, {
       method: 'POST',
       headers: { 'content-type': 'application/json', apikey: PUB_KEY, authorization: 'Bearer ' + PUB_KEY },
-      body: JSON.stringify({ model: 'claude-opus-5-5', max_tokens: 2048, system: systemPrompt(), messages })
+      body: JSON.stringify({ model: 'claude-opus-5-5', max_tokens: 2048, system: systemPrompt(), tools: toolsForAPI(), messages })
     });
     const data = await r.json();
     if (!r.ok) throw new Error((data && data.error && (data.error.message || data.error)) || `שגיאה ${r.status}`);
-    // תגובה יכולה לכלול thinking + text — חילצי רק את הטקסט
-    const text = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n').trim();
-    return text || '(אין תוכן בתגובה)';
+    return data;
+  }
+
+  async function runTurn(messages, uiAppend, uiReplaceLoading) {
+    let turn = 0;
+    while (turn++ < MAX_TURNS) {
+      uiAppend({ type: 'loading' });
+      const data = await callApi(messages);
+      uiReplaceLoading();
+      const assistantContent = data.content || [];
+      messages.push({ role: 'assistant', content: assistantContent });
+      for (const block of assistantContent) {
+        if (block.type === 'text' && block.text.trim()) uiAppend({ type: 'text', text: block.text });
+      }
+      const toolUses = assistantContent.filter(b => b.type === 'tool_use');
+      if (!toolUses.length) return messages;
+      const toolResults = [];
+      for (const use of toolUses) {
+        const def = TOOLS[use.name];
+        if (!def) { toolResults.push({ type: 'tool_result', tool_use_id: use.id, content: 'tool not found', is_error: true }); continue; }
+        if (def.approval === 'confirm') {
+          const ok = await new Promise(res => uiAppend({ type: 'approval', toolName: use.name, input: use.input, resolve: res }));
+          if (!ok) {
+            toolResults.push({ type: 'tool_result', tool_use_id: use.id, content: 'המשתמש ביטל את הפעולה', is_error: true });
+            uiAppend({ type: 'tool', name: use.name, result: 'בוטל ע״י המשתמש', error: true });
+            continue;
+          }
+        }
+        try {
+          const result = def.execute(use.input || {});
+          toolResults.push({ type: 'tool_result', tool_use_id: use.id, content: result });
+          uiAppend({ type: 'tool', name: use.name, result });
+        } catch (e) {
+          toolResults.push({ type: 'tool_result', tool_use_id: use.id, content: 'שגיאה: ' + e.message, is_error: true });
+          uiAppend({ type: 'tool', name: use.name, result: 'שגיאה: ' + e.message, error: true });
+        }
+      }
+      messages.push({ role: 'user', content: toolResults });
+    }
+    uiAppend({ type: 'text', text: '⚠ הגענו לתקרת הכלים ללא תשובה סופית.' });
+    return messages;
+  }
+
+  function renderMsg(m) {
+    if (m.type === 'user') return `<div class="msg msg-u">${U.esc(m.text).replace(/\n/g, '<br>')}</div>`;
+    if (m.type === 'text') {
+      let html = U.esc(m.text);
+      html = html.replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>');
+      html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+      html = html.replace(/\n/g, '<br>');
+      return `<div class="msg msg-a ${m.error ? 'err' : ''}">${html}</div>`;
+    }
+    if (m.type === 'tool') {
+      const resPreview = (m.result || '').slice(0, 300);
+      return `<div class="msg msg-tool ${m.error ? 'err' : ''}">🔧 <b>${U.esc(m.name)}</b><details><summary class="small muted">תוצאה (${(m.result || '').length} תווים)</summary><pre style="white-space:pre-wrap;font-size:.8rem;margin-top:6px">${U.esc(resPreview)}${(m.result || '').length > 300 ? '…' : ''}</pre></details></div>`;
+    }
+    if (m.type === 'loading') return `<div class="msg msg-a loading"><span></span><span></span><span></span></div>`;
+    if (m.type === 'approval') {
+      return `<div class="msg msg-approval" data-approval-id="${m._id}">❓ ${U.esc(approvalText(m.toolName, m.input))}<div class="row" style="margin-top:8px;gap:8px"><button class="btn sm" data-apr-yes>${A.icon('check')}אשר</button><button class="btn sm ghost" data-apr-no>${A.icon('x')}בטל</button></div></div>`;
+    }
+    return '';
   }
 
   function render(main) {
-    const chat = loadChat();
+    const persistent = loadChat();
     A.setActions(`<button class="btn ghost sm" data-act="clear">${A.icon('trash')}שיחה חדשה</button>`);
     main.innerHTML = `
       <div class="assistant-wrap">
@@ -71,12 +309,12 @@ ${JSON.stringify(snap, null, 2)}
           <div style="width:40px;height:40px;border-radius:50%;background:var(--brown);color:var(--cream);display:flex;align-items:center;justify-content:center;font-size:1.3rem">🤖</div>
           <div>
             <h3 style="margin:0">העוזרת של הדסה</h3>
-            <p class="small muted" style="margin:0">Claude Opus · רואה את ההזמנות, המתכונים, המחסן והקופונים שלך</p>
+            <p class="small muted" style="margin:0">Claude Opus · קריאה חופשית · פעולות הרסניות דורשות אישור</p>
           </div>
         </div>
-        <div id="chat" class="chat-box">${chat.length ? chat.map(renderMsg).join('') : `<div class="chat-empty"><p class="muted">הי! אני יכולה לעזור לך לנתח הזמנות, להציע מחירים, לזכור מתכונים, לחשב עלויות ורווחיות ועוד.</p><div class="chat-suggestions">${suggestions().map(s => `<button class="btn ghost sm" data-suggest="${U.esc(s)}">${U.esc(s)}</button>`).join('')}</div></div>`}</div>
+        <div id="chat" class="chat-box">${persistent.length ? persistent.map(renderMsg).join('') : `<div class="chat-empty"><p class="muted">הי! אני יכולה לעזור לך עם ניתוח הזמנות, תמחור, עדכון סטטוס, יצירת קופונים ועוד.</p><div class="chat-suggestions">${suggestions().map(s => `<button class="btn ghost sm" data-suggest="${U.esc(s)}">${U.esc(s)}</button>`).join('')}</div></div>`}</div>
         <form id="chatForm" class="chat-input">
-          <textarea id="chatIn" rows="1" placeholder="מה תרצי לדעת?" autofocus></textarea>
+          <textarea id="chatIn" rows="1" placeholder="מה תרצי לדעת או לבצע?" autofocus></textarea>
           <button class="btn" type="submit" id="chatSend">${A.icon('msg')}שליחה</button>
         </form>
       </div>`;
@@ -84,26 +322,46 @@ ${JSON.stringify(snap, null, 2)}
     const chatBox = main.querySelector('#chat'), input = main.querySelector('#chatIn'), form = main.querySelector('#chatForm'), sendBtn = main.querySelector('#chatSend');
     chatBox.scrollTop = chatBox.scrollHeight;
 
+    const uiMsgs = persistent.slice();
+    let apiMsgs = loadApiMessages();
+
+    const redrawChat = () => {
+      chatBox.innerHTML = uiMsgs.map(renderMsg).join('');
+      chatBox.scrollTop = chatBox.scrollHeight;
+      chatBox.querySelectorAll('[data-approval-id]').forEach(el => {
+        const id = el.dataset.approvalId;
+        const pendingMsg = uiMsgs.find(m => m._id === id);
+        if (!pendingMsg || !pendingMsg.resolve) return;
+        el.querySelector('[data-apr-yes]').onclick = () => { const r = pendingMsg.resolve; pendingMsg.resolve = null; el.innerHTML = '✓ מאושר'; r(true); };
+        el.querySelector('[data-apr-no]').onclick = () => { const r = pendingMsg.resolve; pendingMsg.resolve = null; el.innerHTML = '✗ בוטל'; r(false); };
+      });
+    };
+
+    const persistTypes = ['user', 'text', 'tool'];
+    const uiAppend = (m) => {
+      if (m.type === 'approval') m._id = 'ap-' + Math.random().toString(36).slice(2, 8);
+      uiMsgs.push(m);
+      saveChat(uiMsgs.filter(x => persistTypes.includes(x.type)));
+      redrawChat();
+    };
+    const uiReplaceLoading = () => { const i = uiMsgs.findIndex(m => m.type === 'loading'); if (i >= 0) uiMsgs.splice(i, 1); redrawChat(); };
+
     const send = async text => {
       if (!text || sendBtn.disabled) return;
-      const messages = loadChat();
-      messages.push({ role: 'user', content: text });
-      saveChat(messages);
-      chatBox.innerHTML = messages.map(renderMsg).join('') + `<div class="msg msg-a loading"><span></span><span></span><span></span></div>`;
-      chatBox.scrollTop = chatBox.scrollHeight;
+      uiMsgs.push({ type: 'user', text });
+      saveChat(uiMsgs.filter(x => persistTypes.includes(x.type)));
+      apiMsgs.push({ role: 'user', content: text });
+      redrawChat();
       sendBtn.disabled = true; input.disabled = true;
       try {
-        const reply = await sendMessage(messages.map(m => ({ role: m.role, content: m.content })));
-        messages.push({ role: 'assistant', content: reply });
-        saveChat(messages);
-        chatBox.innerHTML = messages.map(renderMsg).join('');
+        apiMsgs = await runTurn(apiMsgs, uiAppend, uiReplaceLoading);
+        saveApiMessages(apiMsgs);
+        saveChat(uiMsgs.filter(x => persistTypes.includes(x.type)));
       } catch (e) {
-        messages.push({ role: 'assistant', content: '⚠ שגיאה: ' + e.message, error: true });
-        saveChat(messages);
-        chatBox.innerHTML = messages.map(renderMsg).join('');
+        uiReplaceLoading();
+        uiAppend({ type: 'text', text: '⚠ שגיאה: ' + e.message, error: true });
       } finally {
         sendBtn.disabled = false; input.disabled = false; input.value = ''; input.style.height = 'auto'; input.focus();
-        chatBox.scrollTop = chatBox.scrollHeight;
       }
     };
 
@@ -114,33 +372,19 @@ ${JSON.stringify(snap, null, 2)}
       const s = e.target.closest('[data-suggest]'); if (s) { input.value = s.dataset.suggest; send(s.dataset.suggest); return; }
     };
     document.getElementById('topActions').onclick = e => {
-      if (e.target.closest('[data-act=clear]')) { saveChat([]); A.refresh(); }
+      if (e.target.closest('[data-act=clear]')) { saveChat([]); saveApiMessages([]); A.refresh(); }
     };
-  }
-
-  function renderMsg(m) {
-    if (m.role === 'user') return `<div class="msg msg-u">${U.esc(m.content).replace(/\n/g, '<br>')}</div>`;
-    const cls = m.error ? 'msg msg-a err' : 'msg msg-a';
-    // formatting: bold **x**, code `x`, line breaks
-    let html = U.esc(m.content);
-    html = html.replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>');
-    html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
-    html = html.replace(/\n/g, '<br>');
-    return `<div class="${cls}">${html}</div>`;
   }
 
   function suggestions() {
     const upcoming = A.state.orders.filter(o => o.date >= U.today() && o.status !== 'cancelled').length;
     return [
-      upcoming ? `כמה הזמנות יש לי השבוע?` : `אין לי הזמנות פתוחות — מה כדאי לבדוק?`,
-      'מה המתכון הכי רווחי שלי?',
-      'יש מצרכים שקרובים להיגמר?',
-      'איך אפשר להעלות את הרווחיות?'
+      'מה המתכונים הכי רווחיים שלי?',
+      upcoming ? 'מה יש לי השבוע?' : 'אילו מצרכים חסרים לי?',
+      'תיצרי קופון SHABBAT15 עם 15% הנחה',
+      'אילו מתכונים בהפסד?'
     ];
   }
 
-  P.assistant = {
-    title: 'עוזרת AI',
-    render
-  };
+  P.assistant = { title: 'עוזרת AI', render };
 })(window);

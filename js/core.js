@@ -143,7 +143,7 @@
       vatMode: 'exempt', vatRate: 0.18, nextOrderNum: 1001,
       defaultDeliveryFee: 20, monthlyGoal: 0, monthlyHours: 60, includeFixed: true, lastBackup: null, orderFormUrl: ''
     },
-    ingredients: [], recipes: [], orders: [], expenses: [], recurring: [],
+    ingredients: [], recipes: [], orders: [], expenses: [], recurring: [], coupons: [],
     customers: {}, // הערות ופרטים נוספים לפי מפתח טלפון
     form: A.formDefaults(),
     wheel: { areas: A.WHEEL_AREAS.map(a => a.name), entries: [] },
@@ -176,7 +176,7 @@
     s = Object.assign(d, s || {});
     s.settings = Object.assign(A.defaults().settings, s.settings || {});
     s.wheel = Object.assign(A.defaults().wheel, s.wheel || {});
-    ['ingredients', 'recipes', 'orders', 'expenses', 'recurring'].forEach(k => { if (!Array.isArray(s[k])) s[k] = []; });
+    ['ingredients', 'recipes', 'orders', 'expenses', 'recurring', 'coupons'].forEach(k => { if (!Array.isArray(s[k])) s[k] = []; });
     if (!s.customers || typeof s.customers !== 'object') s.customers = {};
     const fd = A.formDefaults();
     s.form = Object.assign(fd, s.form || {});
@@ -374,8 +374,9 @@
   C.usedAsSub = id => A.state.recipes.filter(r => (r.ingredients || []).some(l => l.subId === id));
   C.orderTotals = o => {
     const subtotal = U.sum(o.items || [], i => (+i.qty || 0) * (+i.unitPrice || 0));
-    const discount = +o.discount || 0, delivery = o.method === 'delivery' ? (+o.deliveryFee || 0) : 0;
-    const total = Math.max(subtotal - discount + delivery, 0);
+    const discount = +o.discount || 0, couponDiscount = +o.couponDiscount || 0;
+    const delivery = o.method === 'delivery' ? (+o.deliveryFee || 0) : 0;
+    const total = Math.max(subtotal - discount - couponDiscount + delivery, 0);
     const paid = +o.paid || 0;
     let cost = 0, activeMin = 0;
     (o.items || []).forEach(i => {
@@ -388,7 +389,31 @@
     });
     const vf = C.vatFactor();
     const net = total / vf;
-    return { subtotal, discount, delivery, total, paid, balance: Math.max(total - paid, 0), cost, profit: net - cost, activeMin, net };
+    return { subtotal, discount, couponDiscount, delivery, total, paid, balance: Math.max(total - paid, 0), cost, profit: net - cost, activeMin, net };
+  };
+
+  /* ---------- קופונים ---------- */
+  C.findCoupon = code => {
+    const k = (code || '').trim().toUpperCase(); if (!k) return null;
+    return (A.state.coupons || []).find(c => (c.code || '').toUpperCase() === k) || null;
+  };
+  C.validateCoupon = (codeOrCoupon, subtotal, orderDate) => {
+    const c = typeof codeOrCoupon === 'string' ? C.findCoupon(codeOrCoupon) : codeOrCoupon;
+    if (!c) return { ok: false, reason: 'קוד לא קיים' };
+    if (c.active === false) return { ok: false, reason: 'הקופון לא פעיל' };
+    const today = orderDate || U.today();
+    if (c.from && today < c.from) return { ok: false, reason: 'הקופון עוד לא תקף' };
+    if (c.to && today > c.to) return { ok: false, reason: 'הקופון פג תוקף' };
+    if (c.minOrder && subtotal < c.minOrder) return { ok: false, reason: `הזמנה מינימלית ${U.money(c.minOrder)}` };
+    if (c.maxUses && (c.uses || 0) >= c.maxUses) return { ok: false, reason: 'הקופון נוצל במלואו' };
+    const val = +c.value || 0;
+    const discount = c.type === 'percent' ? Math.round(subtotal * val) / 100 : Math.min(val, subtotal);
+    return { ok: true, coupon: c, discount: Math.max(0, Math.round(discount * 100) / 100) };
+  };
+  C.incrementCouponUse = code => {
+    const c = C.findCoupon(code); if (!c) return;
+    c.uses = (c.uses || 0) + 1;
+    if (c.maxUses && c.uses >= c.maxUses) c.active = false;
   };
   C.payState = o => {
     const t = C.orderTotals(o);

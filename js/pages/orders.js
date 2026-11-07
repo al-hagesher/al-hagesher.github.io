@@ -115,6 +115,7 @@
         <table class="section"><thead><tr><th>מוצר</th><th class="n">כמות</th><th class="n">מחיר</th><th class="n">סה״כ</th></tr></thead><tbody>
           ${o.items.map(i => `<tr><td>${i.recipeId ? `<a href="#/recipe/${i.recipeId}" data-close>${U.esc(i.name)}</a>` : U.esc(i.name)}${i.description ? `<div class="small muted" style="white-space:pre-wrap;margin-top:2px">${U.esc(i.description)}</div>` : ''}</td><td class="n">${U.fmt(i.qty)}</td><td class="n">${U.money(i.unitPrice)}</td><td class="n">${U.money(i.qty * i.unitPrice)}</td></tr>`).join('')}
           ${t.discount ? `<tr><td colspan="3">הנחה</td><td class="n">−${U.money(t.discount)}</td></tr>` : ''}
+          ${t.couponDiscount ? `<tr><td colspan="3">קופון${o.couponCode ? ` · ${U.esc(o.couponCode)}` : ''}</td><td class="n">−${U.money(t.couponDiscount)}</td></tr>` : ''}
           ${t.delivery ? `<tr><td colspan="3">משלוח</td><td class="n">${U.money(t.delivery)}</td></tr>` : ''}
         </tbody><tfoot><tr><td colspan="3">סה״כ לתשלום</td><td class="n">${U.money(t.total)}</td></tr>
           <tr><td colspan="3" style="font-weight:400">שולם</td><td class="n" style="font-weight:400">${U.money(t.paid)}</td></tr>
@@ -305,6 +306,7 @@
         <div class="divider"></div>
         <div class="form-grid c4">
           <label class="field"><span>הנחה (₪)</span><input type="number" min="0" step="any" name="discount" value="${d.discount || 0}"></label>
+          <label class="field"><span>קוד קופון</span><input name="couponCode" value="${U.esc(d.couponCode || '')}" placeholder="קוד הנחה" style="text-transform:uppercase;letter-spacing:.05em"><span class="small" data-coupon-msg></span></label>
           <label class="field"><span>שולם עד עכשיו (₪)</span><input type="number" min="0" step="any" name="paid" value="${d.paid || 0}"></label>
           <label class="field"><span>אמצעי תשלום</span><select name="payMethod">${A.opts(A.PAY_METHODS, d.payMethod)}</select></label>
           <div class="field"><span>סיכום</span><div id="sumBox" style="font-family:var(--serif);font-size:1.5rem;color:var(--brown)"></div></div>
@@ -366,8 +368,18 @@
           const v = A.formData(w.querySelector('.m-body'));
           const its = readItems();
           its.forEach(i => i.row.querySelector('[data-k=sum]').textContent = U.money(i.qty * i.unitPrice));
-          const t = C.orderTotals({ items: its, discount: v.discount, method, deliveryFee: v.deliveryFee, paid: v.paid });
-          w.querySelector('#sumBox').innerHTML = `${U.money(t.total)}${t.balance ? `<div class="small" style="font-family:var(--sans);color:var(--bad)">יתרה ${U.money(t.balance)}</div>` : ''}`;
+          const subtotal = its.reduce((s, i) => s + i.qty * i.unitPrice, 0);
+          let couponDiscount = 0, couponCode = '';
+          const msgEl = w.querySelector('[data-coupon-msg]');
+          const codeInput = (v.couponCode || '').trim();
+          if (codeInput) {
+            const res = C.validateCoupon(codeInput, subtotal, v.date);
+            if (res.ok) { couponDiscount = res.discount; couponCode = res.coupon.code; if (msgEl) { msgEl.textContent = `✓ הנחה ${U.money(res.discount)}`; msgEl.style.color = 'var(--ok)'; } }
+            else if (msgEl) { msgEl.textContent = '⚠ ' + res.reason; msgEl.style.color = 'var(--bad)'; }
+          } else if (msgEl) { msgEl.textContent = ''; }
+          d.couponCode = couponCode; d.couponDiscount = couponDiscount;
+          const t = C.orderTotals({ items: its, discount: v.discount, couponDiscount, method, deliveryFee: v.deliveryFee, paid: v.paid });
+          w.querySelector('#sumBox').innerHTML = `${U.money(t.total)}${couponDiscount ? `<div class="small" style="font-family:var(--sans);color:var(--ok)">− קופון ${U.money(couponDiscount)}</div>` : ''}${t.balance ? `<div class="small" style="font-family:var(--sans);color:var(--bad)">יתרה ${U.money(t.balance)}</div>` : ''}`;
           // התראת אלרגנים מול המוצרים
           const al = (v.allergies || '');
           const hits = al ? its.flatMap(i => { const r = i.recipeId && C.recipe(i.recipeId); return r ? C.allergens(r).filter(a => al.includes(a) || (a === 'אגוזים' && al.includes('אגוז')) || (a === 'חלב' && al.includes('חלבי'))).map(a => `${i.name}: ${a}`) : []; }) : [];
@@ -402,9 +414,11 @@
             if (!its.length) return A.toast('הוסיפי לפחות מוצר אחד');
             if (its.some(i => !(i.qty > 0))) return A.toast('כמות חייבת להיות גדולה מ־0');
             const target = o || { id: U.uid(), num: s.nextOrderNum++, createdAt: U.today() };
-            Object.assign(target, v, { method, items: its, deliveryFee: method === 'delivery' ? (v.deliveryFee || 0) : 0, discount: v.discount || 0, paid: v.paid || 0, demo: false });
+            const prevCoupon = target.couponCode || '';
+            Object.assign(target, v, { method, items: its, deliveryFee: method === 'delivery' ? (v.deliveryFee || 0) : 0, discount: v.discount || 0, paid: v.paid || 0, couponCode: d.couponCode || '', couponDiscount: d.couponDiscount || 0, demo: false });
             if (method !== 'delivery') target.address = '';
             if (isNew) A.state.orders.push(target);
+            if (target.couponCode && target.couponCode !== prevCoupon) C.incrementCouponUse(target.couponCode);
             A.save(); A.refresh(); A.openOrder(target.id); A.toast(isNew ? 'ההזמנה נקלטה' : 'נשמר');
           }
         });

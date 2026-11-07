@@ -6,6 +6,32 @@
   const STATUS_TXT = { ok: 'רווחי', warn: 'רווח נמוך', bad: 'בהפסד', none: 'ללא מחיר' };
   const thumb = r => A.safeImg(r.image) ? `<img src="${A.safeImg(r.image)}" alt="">` : `<span class="init">${U.esc((r.name || '?').trim()[0] || '?')}</span>`;
 
+  /* ---------- שלבים: תאימות מחרוזת/אובייקט + היסטוריית טיימר ---------- */
+  const stepText = s => typeof s === 'string' ? s : (s && s.text) || '';
+  const stepHist = s => (s && typeof s === 'object' && Array.isArray(s.history)) ? s.history : [];
+  const stepAvg = s => { const h = stepHist(s); if (!h.length) return 0; return h.reduce((a, b) => a + b, 0) / h.length; };
+  // ממירה את step[i] במקום ל-{text, history} ומחזירה אותו
+  function stepObj(r, idx) {
+    const s = r.steps[idx];
+    if (typeof s === 'string') { r.steps[idx] = { text: s, history: [] }; return r.steps[idx]; }
+    if (!Array.isArray(s.history)) s.history = [];
+    return s;
+  }
+  // טיימרים רצים: שמורים ב-localStorage כדי לשרוד רענון/סגירת אפליקציה
+  const TK = 'ag-recipe-timers';
+  const loadTimers = () => { try { return JSON.parse(localStorage.getItem(TK) || '{}'); } catch (e) { return {}; } };
+  const saveTimers = t => { try { localStorage.setItem(TK, JSON.stringify(t)); } catch (e) { } };
+  const timerKey = (rid, idx) => `${rid}|${idx == null ? 'all' : idx}`;
+  // שם: fmt mm:ss או h:mm:ss
+  const fmtElapsed = ms => {
+    const s = Math.max(0, Math.round(ms / 1000));
+    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+    const pad = n => String(n).padStart(2, '0');
+    return h ? `${h}:${pad(m)}:${pad(sec)}` : `${m}:${pad(sec)}`;
+  };
+  A.stepText = stepText; A.stepHist = stepHist; A.stepAvg = stepAvg;
+  A._recipeTimerTick = null;
+
   /* ---------- רשימה ---------- */
   P.recipes = {
     title: 'מתכונים',
@@ -162,8 +188,17 @@
             ${flourG ? `<label class="row small no-print" style="margin-top:10px;gap:6px"><input type="checkbox" data-f="bakers" ${view.bakers ? 'checked' : ''}> הצגת אחוזי אופה (ביחס ל־${A.fmtGrams(flourG)} קמח)</label>` : ''}
           </div>
           <div class="card">
-            <div class="card-h"><h3>אופן ההכנה</h3></div>
-            ${(r.steps || []).length ? `<ol class="steps">${r.steps.map(s => `<li>${U.esc(s)}</li>`).join('')}</ol>` : '<p class="muted">לא נכתבו שלבים.</p>'}
+            <div class="card-h"><h3>אופן ההכנה</h3>${(r.steps || []).length ? (() => { const running = loadTimers()[timerKey(r.id, null)]; return `<button class="btn sm ${running ? 'danger' : 'soft'}" data-recipe-timer="${running ? 'stop' : 'start'}" aria-label="טיימר מתכון כולל">${A.icon('timer')}${running ? `עצירת מתכון (${fmtElapsed(Date.now() - running)})` : 'התחלת מתכון'}</button>`; })() : ''}</div>
+            ${(r.steps || []).length ? `<ol class="steps no-print-timers">${r.steps.map((s, i) => {
+              const txt = stepText(s), avg = stepAvg(s), hist = stepHist(s);
+              const running = loadTimers()[timerKey(r.id, i)];
+              return `<li><div class="step-line">
+                <span class="step-text">${U.esc(txt)}</span>
+                <span class="step-actions no-print">
+                  <button class="btn sm ${running ? 'danger' : 'ghost'}" data-step-timer="${i}" data-action="${running ? 'stop' : 'start'}">${A.icon(running ? 'check' : 'play')}${running ? `עצור (${fmtElapsed(Date.now() - running)})` : 'התחל'}</button>
+                  ${hist.length ? `<span class="small muted" title="${hist.length} פעמים: ${hist.map(ms => fmtElapsed(ms)).join(', ')}">ממוצע ${fmtElapsed(avg)} (${hist.length})</span>` : ''}
+                </span></div></li>`;
+            }).join('')}</ol>${(() => { const totalHist = (r.history || []); return totalHist.length ? `<p class="small muted" style="margin:10px 0 0">משך מתכון כולל ממוצע: <b>${fmtElapsed(totalHist.reduce((a, b) => a + b, 0) / totalHist.length)}</b> (${totalHist.length} פעמים)</p>` : ''; })()}` : '<p class="muted">לא נכתבו שלבים.</p>'}
             ${r.notes ? `<div class="divider"></div><h4>הערות וטיפים</h4><p style="white-space:pre-wrap">${U.esc(r.notes)}</p>` : ''}
           </div>
         </div>
@@ -216,11 +251,43 @@
       </div>`;
 
       const setFactor = v => { if (v > 0 && isFinite(v)) { view.factor = U.round(v, 4); A.refresh(); } };
+      // טיק של שנייה כדי לרענן זמנים רצים (ללא refresh מלא)
+      if (A._recipeTimerTick) clearInterval(A._recipeTimerTick);
+      A._recipeTimerTick = setInterval(() => {
+        const t = loadTimers();
+        main.querySelectorAll('[data-step-timer][data-action=stop]').forEach(btn => {
+          const start = t[timerKey(r.id, +btn.dataset.stepTimer)]; if (!start) return;
+          btn.innerHTML = `${A.icon('check')}עצור (${fmtElapsed(Date.now() - start)})`;
+        });
+        const allBtn = main.querySelector('[data-recipe-timer=stop]');
+        if (allBtn) { const start = t[timerKey(r.id, null)]; if (start) allBtn.innerHTML = `${A.icon('timer')}עצירת מתכון (${fmtElapsed(Date.now() - start)})`; }
+      }, 1000);
+
       main.onclick = e => {
         const b = e.target.closest('button'); if (!b) return;
         if (b.dataset.mode) { view.mode = b.dataset.mode; A.refresh(); }
         else if (b.dataset.factor) setFactor(+b.dataset.factor);
         else if (b.dataset.timer) A.startTimer(+b.dataset.timer, b.dataset.label);
+        else if (b.dataset.stepTimer !== undefined) {
+          const idx = +b.dataset.stepTimer, t = loadTimers(), k = timerKey(r.id, idx);
+          if (b.dataset.action === 'start') { t[k] = Date.now(); saveTimers(t); A.refresh(); A.toast('טיימר הצעד הופעל'); }
+          else { // stop
+            const dur = Date.now() - (t[k] || Date.now()); delete t[k]; saveTimers(t);
+            const step = stepObj(r, idx); step.history.push(dur);
+            if (step.history.length > 20) step.history = step.history.slice(-20);
+            A.commit(`נרשם: ${fmtElapsed(dur)}`);
+          }
+        }
+        else if (b.dataset.recipeTimer) {
+          const t = loadTimers(), k = timerKey(r.id, null);
+          if (b.dataset.recipeTimer === 'start') { t[k] = Date.now(); saveTimers(t); A.refresh(); A.toast('טיימר המתכון הופעל'); }
+          else {
+            const dur = Date.now() - (t[k] || Date.now()); delete t[k]; saveTimers(t);
+            r.history = (r.history || []); r.history.push(dur);
+            if (r.history.length > 20) r.history = r.history.slice(-20);
+            A.commit(`משך מתכון נרשם: ${fmtElapsed(dur)}`);
+          }
+        }
         else if (b.dataset.act === 'pan') {
           const a1 = panArea(main.querySelector('[data-f="panFrom"]').value), a2 = panArea(main.querySelector('[data-f="panTo"]').value);
           if (!a1 || !a2) return A.toast('הזיני קוטר (24) או מידות (20x30)');
@@ -329,7 +396,7 @@
       <div class="row between section"><h2 style="font-size:2rem">${U.esc(r.name)}${f !== 1 ? ` <span class="muted" style="font-size:1.1rem">×${U.fmt(f)}</span>` : ''}</h2><button class="btn ghost" data-x>${A.icon('x')}יציאה</button></div>
       <div class="grid g2">
         <div class="card"><h3 style="margin-bottom:8px">מצרכים</h3>${r.ingredients.map(l => { const d = displayLine(l, f, view.mode); return `<div class="ing-check"><input type="checkbox"><b>${A.fmtQty(d.q, d.unit)} ${unitLabel(d.unit, d.q)}</b> ${U.esc(d.sub ? 'מתכון: ' + d.sub.name : d.ing ? d.ing.name : l.name || '')}${l.section ? ` <span class="muted small">· ${U.esc(l.section)}</span>` : ''}</div>`; }).join('')}</div>
-        <div class="card"><h3 style="margin-bottom:8px">שלבים</h3><ol class="steps">${(r.steps || []).map(s => `<li>${U.esc(s)}</li>`).join('')}</ol>
+        <div class="card"><h3 style="margin-bottom:8px">שלבים</h3><ol class="steps">${(r.steps || []).map(s => `<li>${U.esc(stepText(s))}</li>`).join('')}</ol>
           <div class="row" style="margin-top:12px">${[5, 10, 15, 30].map(m => `<button class="btn sm ghost" data-t="${m}">${A.icon('timer')}${m} דק׳</button>`).join('')}${r.times && r.times.bake ? `<button class="btn sm" data-t="${r.times.bake}">אפייה ${r.times.bake} דק׳</button>` : ''}</div></div>
       </div></div>`;
     document.body.appendChild(el);
@@ -396,7 +463,7 @@
         <div class="divider"></div>
         <div class="form-grid">
           <label class="field full"><span>תיאור קצר</span><input name="description" value="${U.esc(d.description)}"></label>
-          <label class="field full"><span>שלבי הכנה — שלב בכל שורה</span><textarea name="steps" rows="7">${U.esc((d.steps || []).join('\n'))}</textarea></label>
+          <label class="field full"><span>שלבי הכנה — שלב בכל שורה</span><textarea name="steps" rows="7">${U.esc((d.steps || []).map(stepText).join('\n'))}</textarea></label>
           <label class="field"><span>הערות וטיפים</span><textarea name="notes" rows="3">${U.esc(d.notes)}</textarea></label>
           <div class="stack">
             <label class="field"><span>תגיות (מופרדות בפסיק)</span><input name="tags" value="${U.esc((d.tags || []).join(', '))}" placeholder="פרווה, ללא גלוטן, שבת"></label>
@@ -450,7 +517,10 @@
               name: v.name, category: v.category, yield: v.yield, yieldUnit: v.yieldUnit, price: v.price || 0,
               packagingPerUnit: v.packagingPerUnit || 0, otherCost: v.otherCost || 0, ovenTemp: v.ovenTemp || '',
               times: { prep: v.t_prep || 0, rest: v.t_rest || 0, bake: v.t_bake || 0, cool: v.t_cool || 0, decor: v.t_decor || 0 },
-              ingredients: ls, steps: v.steps.split('\n').map(s => s.trim()).filter(Boolean), notes: v.notes,
+              ingredients: ls, steps: (() => {
+                const oldByText = {}; (r && r.steps || []).forEach(s => { const o = typeof s === 'string' ? { text: s, history: [] } : (s.history ? s : { text: s.text, history: [] }); if (o.text) oldByText[o.text] = o.history || []; });
+                return v.steps.split('\n').map(s => s.trim()).filter(Boolean).map(t => ({ text: t, history: oldByText[t] || [] }));
+              })(), notes: v.notes,
               tags: v.tags.split(',').map(s => s.trim()).filter(Boolean), description: v.description, image: d.image || '', demo: false,
               storage: { room: v.s_room || 0, fridge: v.s_fridge || 0, freezer: v.s_freezer || 0, note: v.s_note || '' }
             });

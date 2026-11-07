@@ -37,7 +37,7 @@
   P.orders = {
     title: 'הזמנות',
     render(main) {
-      A.setActions(`<a class="btn ghost hide-m" href="#/form">${A.icon('link')}טופס ללקוחות</a><button class="btn" data-act="new">${A.icon('plus')}הזמנה חדשה</button>`);
+      A.setActions(`<a class="btn ghost hide-m" href="#/form">${A.icon('link')}טופס ללקוחות</a><button class="btn ghost hide-m" data-act="weekly">${A.icon('print')}הדפסה שבועית</button><button class="btn" data-act="new">${A.icon('plus')}הזמנה חדשה</button>`);
       const list = filtered();
       const counts = { today: A.state.orders.filter(o => o.date === U.today() && o.status !== 'cancelled').length, unpaid: A.state.orders.filter(o => o.status !== 'cancelled' && C.orderTotals(o).balance > 0.01).length };
       const head = `<div class="row section">
@@ -65,6 +65,7 @@
       document.getElementById('topActions').onclick = e => {
         const b = e.target.closest('[data-act]'); if (!b) return;
         if (b.dataset.act === 'new') A.editOrder(null, view.mode === 'cal' && view.day ? { date: view.day } : null);
+        else if (b.dataset.act === 'weekly') A.printWeeklyOrders();
       };
     }
   };
@@ -112,7 +113,7 @@
         ${payNotice(o, t)}
         ${o.allergies ? `<div class="notice section">${A.icon('alert')}<div><b>רגישויות:</b> ${U.esc(o.allergies)}</div></div>` : ''}
         <table class="section"><thead><tr><th>מוצר</th><th class="n">כמות</th><th class="n">מחיר</th><th class="n">סה״כ</th></tr></thead><tbody>
-          ${o.items.map(i => `<tr><td>${i.recipeId ? `<a href="#/recipe/${i.recipeId}" data-close>${U.esc(i.name)}</a>` : U.esc(i.name)}</td><td class="n">${U.fmt(i.qty)}</td><td class="n">${U.money(i.unitPrice)}</td><td class="n">${U.money(i.qty * i.unitPrice)}</td></tr>`).join('')}
+          ${o.items.map(i => `<tr><td>${i.recipeId ? `<a href="#/recipe/${i.recipeId}" data-close>${U.esc(i.name)}</a>` : U.esc(i.name)}${i.description ? `<div class="small muted" style="white-space:pre-wrap;margin-top:2px">${U.esc(i.description)}</div>` : ''}</td><td class="n">${U.fmt(i.qty)}</td><td class="n">${U.money(i.unitPrice)}</td><td class="n">${U.money(i.qty * i.unitPrice)}</td></tr>`).join('')}
           ${t.discount ? `<tr><td colspan="3">הנחה</td><td class="n">−${U.money(t.discount)}</td></tr>` : ''}
           ${t.delivery ? `<tr><td colspan="3">משלוח</td><td class="n">${U.money(t.delivery)}</td></tr>` : ''}
         </tbody><tfoot><tr><td colspan="3">סה״כ לתשלום</td><td class="n">${U.money(t.total)}</td></tr>
@@ -161,7 +162,7 @@
     const biz = A.state.settings.businessName || 'על הגשר';
     const first = (o.customerName || '').split(' ')[0];
     const when = `${U.dayName(o.date)} ${U.fmtDate(o.date)}${o.time ? ' בשעה ' + o.time : ''}`;
-    const items = o.items.map(i => `• ${U.fmt(i.qty)} × ${i.name}`).join('\n');
+    const items = o.items.map(i => `• ${U.fmt(i.qty)} × ${i.name}${i.description ? ` (${i.description})` : ''}`).join('\n');
     const pickup = (A.state.form && A.state.form.pickupAddress) || A.state.settings.address || '';
     const pay = A.state.form && A.state.form.payInfo || '';
     return [
@@ -179,7 +180,7 @@
       <div style="text-align:center"><img src="${new URL('assets/logo.png', location.href)}" style="width:150px"></div>
       <h2>הזמנה #${o.num}</h2><div>${U.esc(o.customerName)} · <span dir="ltr">${U.esc(o.phone || '')}</span></div>
       <div>${U.dayName(o.date)} ${U.fmtDate(o.date)} ${o.time || ''} · ${o.method === 'delivery' ? 'משלוח: ' + U.esc(o.address || '') : 'איסוף עצמי'}</div><hr>
-      <table style="width:100%">${o.items.map(i => `<tr><td>${U.fmt(i.qty)} × ${U.esc(i.name)}</td><td class="n">${U.money(i.qty * i.unitPrice)}</td></tr>`).join('')}
+      <table style="width:100%">${o.items.map(i => `<tr><td>${U.fmt(i.qty)} × ${U.esc(i.name)}${i.description ? `<div style="color:#8a7462;font-size:0.85em;white-space:pre-wrap">${U.esc(i.description)}</div>` : ''}</td><td class="n">${U.money(i.qty * i.unitPrice)}</td></tr>`).join('')}
       ${t.discount ? `<tr><td>הנחה</td><td class="n">−${U.money(t.discount)}</td></tr>` : ''}${t.delivery ? `<tr><td>משלוח</td><td class="n">${U.money(t.delivery)}</td></tr>` : ''}
       <tr><td><b>סה״כ</b></td><td class="n"><b>${U.money(t.total)}</b></td></tr><tr><td>שולם</td><td class="n">${U.money(t.paid)}</td></tr>${t.balance ? `<tr><td>יתרה</td><td class="n">${U.money(t.balance)}</td></tr>` : ''}</table><hr>
       ${o.allergies ? `<p><b>רגישויות:</b> ${U.esc(o.allergies)}</p>` : ''}${o.notes ? `<p>${U.esc(o.notes)}</p>` : ''}
@@ -187,19 +188,98 @@
     w.document.close(); setTimeout(() => { try { w.focus(); w.print(); } catch (e) { } }, 500);
   }
 
+  /* ---------- ייצוא שבועי ---------- */
+  A.printWeeklyOrders = (fromDate) => {
+    const start = fromDate || U.today();
+    const end = U.addDays(start, 6);
+    const list = A.state.orders.filter(o => o.status !== 'cancelled' && o.date >= start && o.date <= end).sort((a, b) => (a.date + (a.time || '')).localeCompare(b.date + (b.time || '')));
+    if (!list.length && !confirm('אין הזמנות השבוע. להציג בכל זאת?')) return;
+    const biz = A.state.settings.businessName || 'על הגשר';
+    const totals = list.reduce((s, o) => { const t = C.orderTotals(o); s.rev += t.total; s.paid += t.paid; s.bal += t.balance; s.prof += t.profit; return s; }, { rev: 0, paid: 0, bal: 0, prof: 0 });
+    const byDay = U.groupBy(list, o => o.date);
+    const w = root.open('', '_blank');
+    if (!w) return A.toast('הדפדפן חסם חלון — אפשרי חלונות קופצים');
+    const dayBlock = (iso) => {
+      const os = byDay[iso] || [];
+      const dayTotal = os.reduce((s, o) => s + C.orderTotals(o).total, 0);
+      return `<section class="day"><h2>${U.dayName(iso)} · ${U.fmtDate(iso)} <span class="muted">· ${os.length} הזמנות · ${U.money(dayTotal)}</span></h2>
+        ${os.length ? os.map(o => {
+          const t = C.orderTotals(o);
+          return `<article class="ord">
+            <header><div><b>#${o.num}</b> · ${U.esc(o.customerName || 'ללא שם')}${o.phone ? ` · <span dir="ltr">${U.esc(o.phone)}</span>` : ''}</div>
+              <div class="right"><b>${U.money(t.total)}</b>${t.balance ? `<span class="bal"> · יתרה ${U.money(t.balance)}</span>` : ''}</div></header>
+            <div class="meta">${o.time ? '⏰ ' + o.time + ' · ' : ''}${o.method === 'delivery' ? '🚚 משלוח: ' + U.esc(o.address || '') : '🛍 איסוף עצמי'}${o.allergies ? ` · <b>⚠ רגישויות: ${U.esc(o.allergies)}</b>` : ''}</div>
+            <ul class="items">${o.items.map(i => `<li>${U.fmt(i.qty)} × <b>${U.esc(i.name)}</b> ${i.unitPrice ? `<span class="muted">(${U.money(i.unitPrice)}/יח׳ · סה״כ ${U.money(i.qty * i.unitPrice)})</span>` : ''}${i.description ? `<div class="desc">${U.esc(i.description)}</div>` : ''}</li>`).join('')}</ul>
+            ${o.notes ? `<div class="notes"><b>הערות:</b> ${U.esc(o.notes)}</div>` : ''}
+          </article>`;
+        }).join('') : '<p class="empty">אין הזמנות ביום הזה</p>'}
+      </section>`;
+    };
+    const days = [];
+    for (let i = 0; i < 7; i++) days.push(U.addDays(start, i));
+    w.document.write(`<!doctype html><html dir="rtl" lang="he"><head><meta charset="utf-8"><title>סיכום שבועי · ${U.fmtDate(start)}–${U.fmtDate(end)}</title>
+      <style>
+        * { box-sizing: border-box; }
+        body { font-family: 'Assistant', Arial, sans-serif; color: #2f1d11; max-width: 820px; margin: 0 auto; padding: 24px; line-height: 1.45; }
+        h1 { font-family: 'Frank Ruhl Libre', serif; color: #4a2a16; margin: 0 0 4px; font-size: 1.8rem; }
+        .topline { color: #8a7462; margin-bottom: 20px; }
+        .summary { background: #f7efe5; border-radius: 12px; padding: 14px 18px; margin-bottom: 22px; display: flex; gap: 22px; flex-wrap: wrap; font-size: .95rem; }
+        .summary b { color: #4a2a16; }
+        h2 { font-family: 'Frank Ruhl Libre', serif; color: #4a2a16; border-bottom: 2px solid #b8875e; padding-bottom: 4px; margin: 28px 0 10px; font-size: 1.3rem; }
+        .muted { color: #8a7462; font-weight: 400; font-size: .9em; }
+        .ord { border: 1px solid #e8ddd0; border-radius: 10px; padding: 10px 14px; margin-bottom: 10px; page-break-inside: avoid; break-inside: avoid; }
+        .ord header { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+        .ord .right { text-align: left; }
+        .ord .meta { color: #5a4030; font-size: .9rem; margin-bottom: 6px; }
+        .ord .items { margin: 4px 0; padding-right: 20px; }
+        .ord .items li { margin-bottom: 2px; }
+        .ord .desc { color: #8a7462; font-size: .85rem; white-space: pre-wrap; padding-right: 8px; }
+        .ord .notes { background: #fff8ef; padding: 6px 10px; border-radius: 6px; margin-top: 6px; font-size: .9rem; }
+        .ord .bal { color: #b00020; }
+        .empty { color: #8a7462; font-style: italic; padding: 6px 10px; }
+        .foot { margin-top: 30px; text-align: center; color: #8a7462; font-size: .85rem; }
+        .print-btn { position: fixed; top: 16px; left: 16px; background: #4a2a16; color: #fff8ef; border: 0; padding: 10px 18px; border-radius: 10px; font-size: 1rem; cursor: pointer; font-family: inherit; }
+        @media print {
+          .print-btn { display: none; }
+          body { padding: 12px; }
+          .summary { background: #fff; border: 1px solid #ccc; }
+        }
+        @page { margin: 12mm; }
+      </style></head>
+      <body>
+        <button class="print-btn" onclick="window.print()">🖨 הדפסה</button>
+        <h1>${U.esc(biz)} · סיכום שבועי</h1>
+        <div class="topline">${U.fmtDate(start)} – ${U.fmtDate(end)}</div>
+        <div class="summary">
+          <div><b>${list.length}</b> הזמנות</div>
+          <div>הכנסה צפויה: <b>${U.money(totals.rev)}</b></div>
+          <div>שולם: <b>${U.money(totals.paid)}</b></div>
+          ${totals.bal > 0.01 ? `<div>יתרה: <b style="color:#b00020">${U.money(totals.bal)}</b></div>` : ''}
+          <div>רווח גולמי: <b style="color:${totals.prof >= 0 ? '#2e7d32' : '#b00020'}">${U.money(totals.prof)}</b></div>
+        </div>
+        ${days.map(dayBlock).join('')}
+        <div class="foot">הופק ב-${U.fmtDate(U.today())} · ${U.esc(biz)}</div>
+      </body></html>`);
+    w.document.close();
+  };
+
   /* ---------- טופס הזמנה ---------- */
   A.editOrder = (o, preset) => {
     const isNew = !o, s = A.state.settings;
     const d = o ? U.clone(o) : Object.assign({ customerName: '', phone: '', date: U.addDays(U.today(), 1), time: '', method: 'pickup', address: '', deliveryFee: s.defaultDeliveryFee, items: [], discount: 0, paid: 0, payMethod: 'ביט', source: 'וואטסאפ', notes: '', allergies: '', status: 'new' }, preset || {});
-    if (!d.items.length) d.items.push({ recipeId: '', name: '', qty: 1, unitPrice: '' });
+    if (!d.items.length) d.items.push({ recipeId: '', name: '', qty: 1, unitPrice: '', description: '' });
     const recipes = A.state.recipes.slice().sort((a, b) => a.name.localeCompare(b.name, 'he'));
     const custs = C.customers();
     const itemHtml = i => `<div class="item-row" data-item>
-      <input list="prodList" value="${U.esc(i.name)}" placeholder="מוצר" data-k="name">
-      <input type="number" min="0" step="any" value="${i.qty}" data-k="qty" aria-label="כמות">
-      <input type="number" min="0" step="any" value="${i.unitPrice}" placeholder="מחיר" data-k="unitPrice" aria-label="מחיר ליחידה">
-      <span class="sub small n" data-k="sum"></span>
-      <button class="icon-btn" data-rm aria-label="הסרה">${A.icon('x')}</button></div>`;
+      <div class="item-main">
+        <input list="prodList" value="${U.esc(i.name)}" placeholder="מוצר" data-k="name">
+        <input type="number" min="0" step="any" value="${i.qty}" data-k="qty" aria-label="כמות">
+        <input type="number" min="0" step="any" value="${i.unitPrice}" placeholder="מחיר" data-k="unitPrice" aria-label="מחיר ליחידה">
+        <span class="sub small n" data-k="sum"></span>
+        <button class="icon-btn" data-rm aria-label="הסרה">${A.icon('x')}</button>
+      </div>
+      <textarea class="item-desc" placeholder="תיאור / עיצוב / הקדשה (אופציונלי)" data-k="description" rows="1">${U.esc(i.description || '')}</textarea>
+    </div>`;
     A.modal({
       title: isNew ? 'הזמנה חדשה' : `עריכת הזמנה #${o.num}`, size: 'wide',
       body: `<datalist id="prodList">${recipes.map(r => `<option value="${U.esc(r.name)}">${r.price ? U.money(r.price) : ''}</option>`).join('')}</datalist>
@@ -218,7 +298,10 @@
         <div class="divider"></div>
         <div class="row between" style="margin-bottom:8px"><h4>מוצרים</h4><span class="small muted">בחרי מוצר מהרשימה — המחיר יתמלא לבד</span></div>
         <div id="items">${d.items.map(itemHtml).join('')}</div>
-        <button class="btn ghost sm" data-add>${A.icon('plus')}הוספת מוצר</button>
+        <div class="row" style="gap:8px;flex-wrap:wrap">
+          <button class="btn ghost sm" data-add>${A.icon('plus')}הוספת פריט ידני</button>
+          <button class="btn ghost sm" data-pick>${A.icon('plus')}בחירה מהקטלוג</button>
+        </div>
         <div class="divider"></div>
         <div class="form-grid c4">
           <label class="field"><span>הנחה (₪)</span><input type="number" min="0" step="any" name="discount" value="${d.discount || 0}"></label>
@@ -233,12 +316,51 @@
       onMount(w) {
         const items = w.querySelector('#items');
         let method = d.method;
+        const pickFromCatalog = onPick => {
+          let q = '';
+          const checked = new Set();
+          const dlg = document.createElement('dialog');
+          dlg.className = 'wide';
+          dlg.style.cssText = 'padding:0;border:0;border-radius:16px;max-width:620px;width:92vw;background:var(--cream);box-shadow:0 20px 60px rgba(0,0,0,.35)';
+          const renderList = () => {
+            const match = recipes.filter(r => !q || r.name.includes(q));
+            return match.length ? match.map(r => `<label class="pick-row"><input type="checkbox" data-rid="${r.id}"${checked.has(r.id) ? ' checked' : ''}><span class="pr-name">${U.esc(r.name)}</span>${r.price ? `<span class="pr-price">${U.money(r.price)}</span>` : ''}</label>`).join('') : '<p class="muted" style="padding:16px;text-align:center">אין מתכונים תואמים</p>';
+          };
+          const draw = () => {
+            dlg.innerHTML = `<div class="m-wrap"><div class="m-head"><h2>בחירת מוצרים מהקטלוג</h2><button class="icon-btn" data-x aria-label="סגירה">${A.icon('x')}</button></div>
+              <div class="m-body">
+                <div class="row section" style="gap:8px;align-items:center;flex-wrap:wrap">
+                  <div class="search" style="flex:1;min-width:180px">${A.icon('search')}<input type="search" placeholder="חיפוש מתכון…" data-pq value="${U.esc(q)}" autofocus></div>
+                  <button class="btn ghost sm" data-all>סמני הכל</button>
+                  <button class="btn ghost sm" data-none>נקי הכל</button>
+                </div>
+                <div class="pick-list" data-list>${renderList()}</div>
+                <div class="small muted" style="margin-top:8px" data-count>נבחרו: ${checked.size}</div>
+              </div>
+              <div class="m-foot"><button class="btn" data-ok>${A.icon('check')}הוספת הנבחרים</button><button class="btn ghost" data-x>ביטול</button></div>
+            </div>`;
+          };
+          draw();
+          document.body.appendChild(dlg);
+          const refreshList = () => { dlg.querySelector('[data-list]').innerHTML = renderList(); dlg.querySelector('[data-count]').textContent = 'נבחרו: ' + checked.size; };
+          dlg.addEventListener('change', e => { const cb = e.target.closest('[data-rid]'); if (cb) { if (cb.checked) checked.add(cb.dataset.rid); else checked.delete(cb.dataset.rid); dlg.querySelector('[data-count]').textContent = 'נבחרו: ' + checked.size; } });
+          dlg.addEventListener('input', e => { if (e.target.dataset.pq !== undefined) { q = e.target.value.trim(); const pos = e.target.selectionStart; refreshList(); const inp = dlg.querySelector('[data-pq]'); inp.focus(); inp.setSelectionRange(pos, pos); } });
+          const close = () => { dlg.close(); dlg.remove(); };
+          dlg.addEventListener('click', e => {
+            if (e.target.closest('[data-all]')) { recipes.forEach(r => { if (!q || r.name.includes(q)) checked.add(r.id); }); refreshList(); }
+            if (e.target.closest('[data-none]')) { if (!q) checked.clear(); else recipes.forEach(r => { if (r.name.includes(q)) checked.delete(r.id); }); refreshList(); }
+            if (e.target.closest('[data-x]')) close();
+            if (e.target.closest('[data-ok]')) { const picked = recipes.filter(r => checked.has(r.id)); if (!picked.length) return A.toast('לא נבחרו מתכונים'); close(); onPick(picked); }
+          });
+          dlg.addEventListener('cancel', e => { e.preventDefault(); close(); });
+          dlg.showModal();
+        };
         const showDel = () => w.querySelectorAll('[data-del-only]').forEach(x => x.style.display = method === 'delivery' ? '' : 'none');
         showDel();
         const readItems = () => [...items.querySelectorAll('[data-item]')].map(row => {
           const g = k => row.querySelector(`[data-k="${k}"]`).value.trim();
           const name = g('name'), r = A.state.recipes.find(x => x.name === name);
-          return { recipeId: r ? r.id : null, name, qty: U.num(g('qty')), unitPrice: U.num(g('unitPrice')), row };
+          return { recipeId: r ? r.id : null, name, qty: U.num(g('qty')), unitPrice: U.num(g('unitPrice')), description: g('description'), row };
         }).filter(i => i.name);
         const update = () => {
           const v = A.formData(w.querySelector('.m-body'));
@@ -269,7 +391,8 @@
         w.addEventListener('click', e => {
           const m = e.target.closest('[data-method]');
           if (m) { method = m.dataset.method; w.querySelectorAll('[data-method]').forEach(x => x.classList.toggle('on', x === m)); showDel(); update(); }
-          if (e.target.closest('[data-add]')) { items.insertAdjacentHTML('beforeend', itemHtml({ name: '', qty: 1, unitPrice: '' })); items.lastElementChild.querySelector('input').focus(); }
+          if (e.target.closest('[data-add]')) { items.insertAdjacentHTML('beforeend', itemHtml({ name: '', qty: 1, unitPrice: '', description: '' })); items.lastElementChild.querySelector('input').focus(); }
+          if (e.target.closest('[data-pick]')) { pickFromCatalog(selected => { selected.forEach(r => items.insertAdjacentHTML('beforeend', itemHtml({ recipeId: r.id, name: r.name, qty: 1, unitPrice: r.price || '', description: '' }))); update(); }); }
           const rm = e.target.closest('[data-rm]'); if (rm) { rm.closest('[data-item]').remove(); update(); }
           if (e.target.closest('[data-save]')) {
             const v = A.formData(w.querySelector('.m-body'));

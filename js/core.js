@@ -131,7 +131,7 @@
     days: { 0: { on: false, from: '09:00', to: '18:00' }, 1: { on: false, from: '09:00', to: '18:00' }, 2: { on: false, from: '09:00', to: '18:00' }, 3: { on: false, from: '09:00', to: '18:00' }, 4: { on: true, from: '10:00', to: '19:00' }, 5: { on: true, from: '08:00', to: '13:00' }, 6: { on: false, from: '20:00', to: '22:00' } },
     delivery: { on: false, fee: 20, freeAbove: 0, note: '' },
     pay: { mode: 'deposit', pct: 50, bit: '', paybox: '', hours: 24 },
-    products: {}
+    products: {}, customProducts: []
   });
 
   /* ---------- מצב ברירת מחדל ---------- */
@@ -196,6 +196,7 @@
     s.form.pay = Object.assign(A.formDefaults().pay, s.form.pay || {});
     if (!Array.isArray(s.form.blocked)) s.form.blocked = [];
     if (!s.form.products || typeof s.form.products !== 'object') s.form.products = {};
+    if (!Array.isArray(s.form.customProducts)) s.form.customProducts = [];
     return s;
   };
   A.load = async () => {
@@ -408,7 +409,7 @@
     const k = (code || '').trim().toUpperCase(); if (!k) return null;
     return (A.state.coupons || []).find(c => (c.code || '').toUpperCase() === k) || null;
   };
-  C.validateCoupon = (codeOrCoupon, subtotal, orderDate) => {
+  C.validateCoupon = (codeOrCoupon, subtotal, orderDate, phone) => {
     const c = typeof codeOrCoupon === 'string' ? C.findCoupon(codeOrCoupon) : codeOrCoupon;
     if (!c) return { ok: false, reason: 'קוד לא קיים' };
     if (c.active === false) return { ok: false, reason: 'הקופון לא פעיל' };
@@ -417,6 +418,11 @@
     if (c.to && today > c.to) return { ok: false, reason: 'הקופון פג תוקף' };
     if (c.minOrder && subtotal < c.minOrder) return { ok: false, reason: `הזמנה מינימלית ${U.money(c.minOrder)}` };
     if (c.maxUses && (c.uses || 0) >= c.maxUses) return { ok: false, reason: 'הקופון נוצל במלואו' };
+    if (c.firstOrderOnly && phone) {
+      const normPhone = (phone || '').replace(/\D/g, '');
+      const existing = A.state.orders.some(o => o.phone && o.phone.replace(/\D/g, '') === normPhone && o.status !== 'cancelled');
+      if (existing) return { ok: false, reason: 'הקופון מיועד להזמנה ראשונה בלבד' };
+    }
     const val = +c.value || 0;
     const discount = c.type === 'percent' ? Math.round(subtotal * val) / 100 : Math.min(val, subtotal);
     return { ok: true, coupon: c, discount: Math.max(0, Math.round(discount * 100) / 100) };

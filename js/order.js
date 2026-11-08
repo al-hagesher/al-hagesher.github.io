@@ -15,9 +15,12 @@
     const DAYS = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
     const fmtD = s => { const [y, m, d] = s.split('-'); return `${+d}/${+m}`; };
     const parse = s => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
-    const slug = new URLSearchParams(location.search).get('f') || '';
+    const params = new URLSearchParams(location.search);
+    const slug = params.get('f') || '';
+    const urlCoupon = (params.get('coupon') || '').trim().toUpperCase();
     const rpc = async (fn, body) => { const r = await fetch(`${SB_URL}/rest/v1/rpc/${fn}`, { method: 'POST', headers: { apikey: SB_KEY, 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); if (!r.ok) throw new Error(r.status); return r.json(); };
-    let cfg, cart = {}, sel = {}, st = { date: '', time: '', method: 'pickup' }, sending = false;
+    let cfg, cart = {}, sel = {}, st = { date: '', time: '', method: 'pickup', coupon: urlCoupon }, sending = false;
+    let couponStatus = null; // { ok, discount, reason, code }
     const saved = (() => { try { return JSON.parse(localStorage.getItem('ag-customer') || '{}'); } catch (e) { return {}; } })();
 
     // ישראל: התאריך של היום לפי שעון ירושלים
@@ -46,6 +49,25 @@
     const lines = () => Object.entries(cart).filter(([, q]) => q > 0).map(([k, q]) => { const [id, opt] = k.split('|'); const p = cfg.products.find(x => x.id === id); return p && { p, opt, q }; }).filter(Boolean);
     const subtotal = () => lines().reduce((s, l) => s + l.q * l.p.price, 0);
     const fee = () => st.method === 'delivery' && cfg.delivery.on ? (cfg.delivery.freeAbove > 0 && subtotal() >= cfg.delivery.freeAbove ? 0 : cfg.delivery.fee) : 0;
+    // אימות קופון ברמת הדפדפן (לקוחה רואה חישוב מידי). בשרת בוצע אימות נוסף כשההזמנה נכנסת לאפליקציה.
+    function checkCoupon(phone) {
+      const code = (st.coupon || '').trim().toUpperCase();
+      if (!code) { couponStatus = null; return; }
+      const sub = subtotal(); if (sub <= 0) { couponStatus = { ok: false, reason: 'הסל ריק', code }; return; }
+      const c = (cfg.coupons || []).find(x => (x.code || '').toUpperCase() === code);
+      if (!c) { couponStatus = { ok: false, reason: 'קוד לא קיים', code }; return; }
+      if (c.minOrder && sub < c.minOrder) { couponStatus = { ok: false, reason: `מינימום ${money(c.minOrder)}`, code }; return; }
+      if (c.to && c.to < todayIL()) { couponStatus = { ok: false, reason: 'הקוד פג תוקף', code }; return; }
+      if (c.from && c.from > todayIL()) { couponStatus = { ok: false, reason: 'הקוד עוד לא תקף', code }; return; }
+      if (c.maxUses && (c.uses || 0) >= c.maxUses) { couponStatus = { ok: false, reason: 'הקוד נוצל במלואו', code }; return; }
+      if (c.firstOrderOnly && phone) {
+        // אימות סופי של firstOrderOnly יקרה בצד המנהלת (יש לה היסטוריית ההזמנות). כאן מראה הודעה רק אם ברור שלא תקף.
+      }
+      const val = +c.value || 0;
+      const discount = c.type === 'percent' ? Math.round(sub * val) / 100 : Math.min(val, sub);
+      couponStatus = { ok: true, code: c.code, discount: Math.max(0, Math.round(discount * 100) / 100), firstOrderOnly: !!c.firstOrderOnly };
+    }
+    const discount = () => (couponStatus && couponStatus.ok ? couponStatus.discount : 0);
 
     async function load() {
       if (!slug) return app.innerHTML = '<div class="empty">הקישור חסר. בקשי קישור חדש לטופס.</div>';
@@ -97,14 +119,15 @@
         <label><span>טלפון *</span><input id="f_p" type="tel" inputmode="tel" autocomplete="tel" placeholder="050-0000000" value="${esc(saved.phone || '')}"></label>
         <label><span>אלרגיות / רגישויות</span><input id="f_al" placeholder="למשל: ללא אגוזים"></label>
         <label><span>הערות (הקדשה, צבעים, בקשות)</span><textarea id="f_no" rows="3"></textarea></label>
+        ${(cfg.coupons && cfg.coupons.length) ? `<label><span>קוד הנחה (אם יש לך)</span><input id="f_cp" value="${esc(st.coupon || '')}" placeholder="למשל: WELCOME10" style="text-transform:uppercase;letter-spacing:.05em"><div id="cpMsg" class="small"></div></label>` : ''}
         ${payRule() ? `<div class="paybox-note">💳 ${payRule()}</div>` : cfg.payInfo ? `<p class="note">💳 ${esc(cfg.payInfo)}</p>` : ''}
-        ${cfg.cancellationPolicy ? `<details class="policy-box"><summary>📋 מדיניות ביטולים — חשוב לקרוא</summary><div class="policy-text">${esc(cfg.cancellationPolicy)}</div></details>` : ''}
+        ${cfg.cancellationPolicy ? `<details class="policy-box" ${urlCoupon ? 'open' : ''}><summary>📋 מדיניות ביטולים — חשוב לקרוא</summary><div class="policy-text">${esc(cfg.cancellationPolicy)}</div></details><label class="check"><input type="checkbox" id="f_policy"><span>קראתי ומסכימה למדיניות הביטולים</span></label>` : ''}
         ${cfg.terms ? `<label class="check"><input type="checkbox" id="f_terms"><span>${esc(cfg.terms)}</span></label>` : ''}
         <div id="err"></div>
         <footer>${esc(cfg.bizName || 'על הגשר')} · ההזמנה תאושר סופית לאחר אישור בעלת העסק</footer>`;
       scrollTo(0, scroll);
       if (st.date) { const b = app.querySelector(`[data-date="${st.date}"]`); if (b) b.scrollIntoView({ block: 'nearest', inline: 'center' }); }
-      bar();
+      checkCoupon($('#f_p') ? $('#f_p').value : ''); bar();
     }
     const pay = () => cfg.pay || { mode: 'none' };
     const dueFor = total => pay().mode === 'full' ? total : pay().mode === 'deposit' ? Math.ceil(total * (pay().pct || 50) / 100) : 0;
@@ -117,14 +140,18 @@
     function bar() {
       let b = $('.bar');
       if (!b) { document.body.insertAdjacentHTML('beforeend', '<div class="bar"><div class="in"><div class="total" id="tot"></div><button class="btn" id="send">שליחת הזמנה</button></div></div>'); b = $('.bar'); }
-      const n = lines().reduce((s, l) => s + l.q, 0), f = fee();
-      const due = dueFor(subtotal() + f);
-      $('#tot').innerHTML = `<b>${money(subtotal() + f)}</b><span>${n ? n + ' פריטים' + (f ? ' · כולל משלוח' : '') : 'הסל ריק'}${cfg.minOrder && subtotal() < cfg.minOrder ? ` · מינימום ${money(cfg.minOrder)}` : ''}${n && due && pay().mode === 'deposit' ? ` · מקדמה ${money(due)}` : ''}</span>`;
+      const n = lines().reduce((s, l) => s + l.q, 0), f = fee(), d = discount();
+      const total = Math.max(subtotal() + f - d, 0);
+      const due = dueFor(total);
+      $('#tot').innerHTML = `<b>${money(total)}</b><span>${n ? n + ' פריטים' + (f ? ' · כולל משלוח' : '') + (d ? ` · הנחה ${money(d)}` : '') : 'הסל ריק'}${cfg.minOrder && subtotal() < cfg.minOrder ? ` · מינימום ${money(cfg.minOrder)}` : ''}${n && due && pay().mode === 'deposit' ? ` · מקדמה ${money(due)}` : ''}</span>`;
       const pn = $('.paybox-note'); if (pn) pn.textContent = '💳 ' + payRule();
+      // הודעת קופון
+      const cpMsg = $('#cpMsg');
+      if (cpMsg) cpMsg.innerHTML = !st.coupon ? '' : couponStatus && couponStatus.ok ? `<span style="color:var(--ok)">✓ הנחה ${money(couponStatus.discount)}${couponStatus.firstOrderOnly ? ' (הזמנה ראשונה בלבד)' : ''}</span>` : couponStatus ? `<span style="color:var(--bad)">⚠ ${esc(couponStatus.reason)}</span>` : '';
       $('#send').disabled = !n || sending;
     }
-    const keep = () => { ['f_n', 'f_p', 'f_a', 'f_al', 'f_no'].forEach(id => { const e = $('#' + id); if (e) keepVals[id] = e.value; }); const t = $('#f_terms'); if (t) keepVals.terms = t.checked; };
-    const restore = () => { Object.entries(keepVals).forEach(([id, v]) => { if (id === 'terms') { const t = $('#f_terms'); if (t) t.checked = v; } else { const e = $('#' + id); if (e) e.value = v; } }); };
+    const keep = () => { ['f_n', 'f_p', 'f_a', 'f_al', 'f_no', 'f_cp'].forEach(id => { const e = $('#' + id); if (e) keepVals[id] = e.value; }); const t = $('#f_terms'); if (t) keepVals.terms = t.checked; const pol = $('#f_policy'); if (pol) keepVals.policy = pol.checked; };
+    const restore = () => { Object.entries(keepVals).forEach(([id, v]) => { if (id === 'terms') { const t = $('#f_terms'); if (t) t.checked = v; } else if (id === 'policy') { const p = $('#f_policy'); if (p) p.checked = v; } else { const e = $('#' + id); if (e) e.value = v; } }); };
     const keepVals = {};
     // שומר על הפוקוס במקום (חשוב לניווט במקלדת ולקורא מסך)
     const focusKey = el => { if (!el || !el.closest) return null; const p = el.closest('.prod'); const a = ['data-d', 'data-opt', 'data-date', 'data-time', 'data-m'].find(x => el.hasAttribute && el.hasAttribute(x)); return a ? { id: p && p.dataset.id, a, v: el.getAttribute(a) } : null; };
@@ -149,6 +176,13 @@
       const m = e.target.closest('[data-m]'); if (m) { st.method = m.dataset.m; rerender(); return; }
       if (e.target.id === 'send') send();
     });
+    document.addEventListener('input', e => {
+      if (e.target.id === 'f_cp') {
+        st.coupon = e.target.value.trim().toUpperCase();
+        const ph = ($('#f_p') || {}).value || '';
+        checkCoupon(ph); bar();
+      }
+    });
     function flash(msg) { const el = $('#err'); if (el) el.innerHTML = `<div class="err" role="alert">${esc(msg)}</div>`; }
     function fail(msg, focusSel) {
       const el = $('#err'); el.innerHTML = `<div class="err" role="alert">${esc(msg)}</div>`;
@@ -165,9 +199,14 @@
       if (st.method === 'delivery' && v('f_a').length < 3) return fail('נא למלא כתובת למשלוח', '#f_a');
       if (v('f_n').length < 2) return fail('נא למלא שם', '#f_n');
       if (v('f_p').replace(/\D/g, '').length < 9) return fail('נא למלא מספר טלפון תקין', '#f_p');
+      if ($('#f_policy') && !$('#f_policy').checked) return fail('נא לאשר את מדיניות הביטולים', '#f_policy');
       if ($('#f_terms') && !$('#f_terms').checked) return fail('נא לאשר את התנאים', '#f_terms');
       sending = true; bar(); $('#send').textContent = 'שולחת…';
-      const order = { name: v('f_n'), phone: v('f_p'), date: st.date, time: st.time, method: st.method, address: v('f_a'), allergies: v('f_al'), notes: v('f_no'),
+      const phone = v('f_p');
+      // אימות סופי של הקופון עם הטלפון
+      checkCoupon(phone);
+      const order = { name: v('f_n'), phone, date: st.date, time: st.time, method: st.method, address: v('f_a'), allergies: v('f_al'), notes: v('f_no'),
+        couponCode: couponStatus && couponStatus.ok ? couponStatus.code : '',
         items: lines().map(l => ({ id: l.p.id, qty: l.q, option: l.opt || '' })) };
       try {
         const res = (await rpc('form_submit', { p_slug: slug, p_order: order }))[0];
@@ -187,9 +226,12 @@
     }
     function done(order, res) {
       const ls = lines(), f = fee(), d = parse(order.date);
+      // אם הופעל קופון — מציגים את הסכום הסופי כולל הנחה (השרת לא יודע על קופונים)
+      const cpDiscount = couponStatus && couponStatus.ok && order.couponCode ? couponStatus.discount : 0;
+      const shownTotal = cpDiscount > 0 ? Math.max(+res.total - cpDiscount, 0) : +res.total;
       const when = `יום ${DAYS[d.getDay()]} ${fmtD(order.date)}${order.time ? ' בשעה ' + order.time : ''}`;
       const text = `היי! שלחתי הזמנה #${res.ref} בטופס 🤎\n` + ls.map(l => `• ${l.q} × ${l.p.name}${l.opt ? ' (' + l.opt + ')' : ''}`).join('\n') +
-        `\n${when} · ${order.method === 'delivery' ? 'משלוח ל' + order.address : 'איסוף עצמי'}\nסה״כ: ${money(+res.total)}${+res.due > 0 ? `\nלתשלום לאישור: ${money(+res.due)}` : ''}\n${order.name}`;
+        `\n${when} · ${order.method === 'delivery' ? 'משלוח ל' + order.address : 'איסוף עצמי'}\nסה״כ: ${money(shownTotal)}${+res.due > 0 ? `\nלתשלום לאישור: ${money(+res.due)}` : ''}\n${order.name}`;
       $('.bar') && $('.bar').remove();
       const needPay = +res.due > 0;
       const payHtml = needPay ? `<div class="pay-step">
@@ -206,7 +248,7 @@
         <p class="note">${needPay ? `הזמנה <b>#${esc(res.ref)}</b> נקלטה ותאושר אחרי התשלום` : `מספר הזמנה <b>#${esc(res.ref)}</b>`} · ${when}</p>
         ${payHtml}
         <div class="sum">${ls.map(l => `<div><span>${l.q} × ${esc(l.p.name)}${l.opt ? ' (' + esc(l.opt) + ')' : ''}</span><span>${money(l.q * l.p.price)}</span></div>`).join('')}
-          ${f ? `<div><span>משלוח</span><span>${money(f)}</span></div>` : ''}<div><span>סה״כ</span><span>${money(+res.total)}</span></div></div>
+          ${f ? `<div><span>משלוח</span><span>${money(f)}</span></div>` : ''}${cpDiscount ? `<div><span>קופון ${esc(order.couponCode)}</span><span style="color:var(--ok)">−${money(cpDiscount)}</span></div>` : ''}<div><span>סה״כ</span><span>${money(shownTotal)}</span></div></div>
         <p id="pickupAddr"></p>
         ${!needPay && cfg.payInfo ? `<p class="note">💳 ${esc(cfg.payInfo)}</p>` : ''}
         <p class="note">${needPay ? 'שאלות? אפשר לשלוח לי הודעה:' : 'אחזור אלייך לאישור סופי. אפשר גם לשלוח לי הודעה:'}</p>

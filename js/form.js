@@ -32,6 +32,7 @@
     });
   };
   F.productList = () => A.state.recipes.filter(r => { const p = fs().products[r.id]; return p && p.on; });
+  F.customList = () => (fs().customProducts || []).filter(p => p.on !== false);
   F.priceOf = r => { const p = fs().products[r.id] || {}; return +p.price > 0 ? +p.price : +r.price || 0; };
   F.load = () => {
     const t = U.today(), load = {};
@@ -50,13 +51,26 @@
         img: p.showImg === false ? '' : await thumb(r.image), options: (p.options || []).filter(Boolean), maxQty: +p.maxQty || 20, allergens: C.allergens(r)
       });
     }
+    // מוצרי טופס ידניים — לא מתכונים (למשל: גלויה, שירות אירוע, מוצר חד-פעמי)
+    for (const cp of F.customList()) {
+      if (!(+cp.price > 0) || !cp.name) continue;
+      products.push({
+        id: 'c-' + cp.id, name: cp.name.trim(), desc: (cp.desc || '').trim(), price: +cp.price, unit: cp.unit || '', cat: cp.cat || '',
+        img: cp.image ? await thumb(cp.image) : '', options: (cp.options || []).filter(Boolean), maxQty: +cp.maxQty || 20, allergens: cp.allergens || [], custom: true
+      });
+    }
+    // קופונים ציבוריים (רק פעילים) — כולל דגל firstOrderOnly לצד הלקוחה. אין כאן מידע סודי: הקוד עצמו מחולק ללקוחות.
+    const coupons = (A.state.coupons || []).filter(c => c.active !== false && (!c.to || c.to >= t)).map(c => ({
+      code: c.code, type: c.type, value: +c.value || 0, minOrder: +c.minOrder || 0,
+      from: c.from || '', to: c.to || '', maxUses: +c.maxUses || 0, uses: +c.uses || 0, firstOrderOnly: !!c.firstOrderOnly
+    }));
     return {
       v: 1, bizName: s.businessName, phone: U.phoneIntl(s.phone), open: !!f.open, closedMsg: f.closedMsg, title: f.title, intro: f.intro,
       pickupAddress: f.pickupAddress, payInfo: f.payInfo, terms: f.terms, cancellationPolicy: s.cancellationPolicy || '', leadDays: +f.leadDays || 0, maxDaysAhead: +f.maxDaysAhead || 30,
       capacity: +f.capacity || 0, slotMinutes: +f.slotMinutes || 0, minOrder: +f.minOrder || 0, blocked: f.blocked.filter(d => d >= t),
       pay: { mode: f.pay.mode, pct: +f.pay.pct || 50, bit: f.pay.bit || s.phone || '', paybox: A.safeUrl(f.pay.paybox), hours: +f.pay.hours || 24 },
       days: f.days, delivery: { on: !!f.delivery.on, fee: +f.delivery.fee || 0, freeAbove: +f.delivery.freeAbove || 0, note: f.delivery.note || '' },
-      products, load: F.load()
+      products, coupons, load: F.load()
     };
   };
   const canon = v => A.syncEq ? JSON.stringify(v) : JSON.stringify(v);
@@ -95,10 +109,19 @@
         if (!row.is_new) return;
         const p = row.payload;
         const itemNotes = p.items.filter(i => i.note).map(i => `${i.name}: ${i.note}`);
+        const items = p.items.map(i => ({ recipeId: C.recipe(i.id) ? i.id : null, name: i.name + (i.option ? ` (${i.option})` : ''), qty: +i.qty, unitPrice: +i.price }));
+        // החלת קופון מהטופס הציבורי — בדיקה מלאה ל-firstOrderOnly לפי ההיסטוריה המקומית
+        let couponCode = '', couponDiscount = 0;
+        if (p.couponCode) {
+          const subtotal = items.reduce((s, i) => s + (+i.qty || 0) * (+i.unitPrice || 0), 0);
+          const res = C.validateCoupon(p.couponCode, subtotal, p.date, p.phone);
+          if (res.ok) { couponCode = res.coupon.code; couponDiscount = res.discount; C.incrementCouponUse(couponCode); }
+          else { itemNotes.push(`⚠ קוד קופון "${p.couponCode}" לא הוחל: ${res.reason}`); }
+        }
         const o = {
           id, num: A.state.settings.nextOrderNum++, formRef: 1000 + row.id, customerName: p.name, phone: p.phone, date: p.date, time: p.time || '',
-          method: p.method, address: p.address || '', deliveryFee: +p.deliveryFee || 0, discount: 0, paid: 0, payMethod: '',
-          items: p.items.map(i => ({ recipeId: C.recipe(i.id) ? i.id : null, name: i.name + (i.option ? ` (${i.option})` : ''), qty: +i.qty, unitPrice: +i.price })),
+          method: p.method, address: p.address || '', deliveryFee: +p.deliveryFee || 0, discount: 0, couponCode, couponDiscount, paid: 0, payMethod: '',
+          items,
           source: 'טופס הזמנה', notes: [p.notes, ...itemNotes].filter(Boolean).join(' · '), allergies: p.allergies || '', status: 'new',
           createdAt: (row.created_at || '').slice(0, 10) || U.today(), createdTs: row.created_at || '',
           payMode: p.payMode || 'none', payDue: +p.amountDue || 0, payClaim: claim
@@ -249,8 +272,13 @@
         <p class="small muted" style="margin:10px 0 0">${f.pay.mode === 'none' ? 'ההזמנות ייכנסו בלי דרישת תשלום.' : 'אחרי שליחת ההזמנה הלקוחה רואה את הסכום לתשלום וכפתורי ביט/פייבוקס, ולוחצת "שילמתי". ההזמנה נשארת "ממתינה לתשלום" עד שאת בודקת שהכסף נכנס ומאשרת — ואז נשלח לה אישור.'}</p>
       </div>
 
-      <div class="card"><div class="card-h"><h3>${A.icon('book')}מוצרים בטופס</h3><span class="small muted">המחיר נלקח מהמתכון אלא אם תכתבי מחיר אחר לטופס</span></div>
-        ${recipes.length ? `<div class="table-wrap"><table class="form-products"><thead><tr><th>מוצג</th><th>מוצר</th><th class="n">מחיר</th><th>תיאור קצר</th><th>טעמים / סוגים (בפסיקים)</th><th class="n">מקס׳</th></tr></thead><tbody>
+      <div class="card"><div class="card-h"><h3>${A.icon('book')}מוצרים בטופס · מתוך המתכונים</h3><span class="small muted">המחיר נלקח מהמתכון אלא אם תכתבי מחיר אחר לטופס</span></div>
+        ${recipes.length ? `<div class="row" style="gap:8px;margin-bottom:10px;flex-wrap:wrap">
+          <button class="btn ghost sm" data-act="selectAll">${A.icon('check')}הצג הכל בטופס</button>
+          <button class="btn ghost sm" data-act="deselectAll">${A.icon('x')}הסר את הכל מהטופס</button>
+          <span class="small muted" style="align-self:center">${F.productList().length} / ${recipes.length} מופעלים</span>
+        </div>
+        <div class="table-wrap"><table class="form-products"><thead><tr><th>מוצג</th><th>מוצר</th><th class="n">מחיר</th><th>תיאור קצר</th><th>טעמים / סוגים (בפסיקים)</th><th class="n">מקס׳</th></tr></thead><tbody>
           ${recipes.map(r => { const p = f.products[r.id] || {}; const price = F.priceOf(r); return `<tr>
             <td><input type="checkbox" data-pp="${r.id}.on" ${p.on ? 'checked' : ''}></td>
             <td><b>${U.esc(r.name)}</b><div class="small muted">${U.esc(r.yieldUnit || '')}${!price ? ' · <span style="color:var(--bad)">חסר מחיר</span>' : ''}</div></td>
@@ -259,6 +287,27 @@
             <td><input data-pp="${r.id}.options" value="${U.esc((p.options || []).join(', '))}" placeholder="וניל, שוקולד"></td>
             <td class="n"><input type="number" min="1" data-pp="${r.id}.maxQty" value="${p.maxQty || ''}" placeholder="20" style="width:64px"></td></tr>`; }).join('')}
         </tbody></table></div>` : '<p class="muted">עוד אין מתכונים. מוצרים בטופס נלקחים מהמתכונים שלך.</p>'}
+      </div>
+
+      <div class="card section"><div class="card-h"><h3>${A.icon('plus')}מוצרים מותאמים אישית</h3><span class="small muted">מוצרים לטופס שלא קיימים כמתכון (למשל: כרטיס ברכה, שירות אירוע, מוצר חד-פעמי)</span></div>
+        ${(f.customProducts || []).length ? `<div class="row" style="gap:8px;margin-bottom:10px;flex-wrap:wrap">
+          <button class="btn ghost sm" data-act="cpSelectAll">${A.icon('check')}הצג הכל</button>
+          <button class="btn ghost sm" data-act="cpDeleteSelected">${A.icon('trash')}מחק את המסומנים</button>
+          <span class="small muted" style="align-self:center">${F.customList().length} / ${f.customProducts.length} מופעלים</span>
+        </div>
+        <div class="table-wrap"><table class="form-products"><thead><tr><th>מוצג</th><th>מוצר</th><th class="n">מחיר</th><th>תיאור</th><th>תמונה</th><th>סוגים</th><th class="n">מקס׳</th><th></th></tr></thead><tbody>
+          ${f.customProducts.map(cp => `<tr data-cp="${cp.id}">
+            <td><input type="checkbox" data-cpk="on" ${cp.on !== false ? 'checked' : ''}></td>
+            <td><input data-cpk="name" value="${U.esc(cp.name || '')}" placeholder="שם המוצר" style="min-width:140px"></td>
+            <td class="n"><input type="number" min="0" data-cpk="price" value="${cp.price || ''}" placeholder="0" style="width:80px"></td>
+            <td><input data-cpk="desc" value="${U.esc(cp.desc || '')}" placeholder="תיאור קצר" style="min-width:140px"></td>
+            <td>${cp.image ? `<img src="${A.safeImg(cp.image)}" alt="" style="width:40px;height:40px;object-fit:cover;border-radius:6px"> <button class="icon-btn" data-cp-rmimg aria-label="הסרת תמונה">${A.icon('x')}</button>` : `<label class="btn ghost sm" style="cursor:pointer">${A.icon('image')}<input type="file" accept="image/*" data-cp-img hidden></label>`}</td>
+            <td><input data-cpk="options" value="${U.esc((cp.options || []).join(', '))}" placeholder="אופציונלי" style="min-width:110px"></td>
+            <td class="n"><input type="number" min="1" data-cpk="maxQty" value="${cp.maxQty || ''}" placeholder="20" style="width:60px"></td>
+            <td><button class="icon-btn" data-cp-del aria-label="מחיקה">${A.icon('trash')}</button></td>
+          </tr>`).join('')}
+        </tbody></table></div>` : '<p class="muted small" style="margin:0">עוד לא הוספת מוצרים מותאמים אישית</p>'}
+        <button class="btn ghost sm" data-act="cpAdd" style="margin-top:10px">${A.icon('plus')}הוספת מוצר חדש</button>
       </div>`;
       F.render(); drawQr(link);
       const setPath = (path, v) => { const ks = path.split('.'); let o = f; ks.slice(0, -1).forEach(k => o = o[k]); o[ks[ks.length - 1]] = v; };
@@ -285,6 +334,21 @@
       };
       main.onclick = async e => {
         if (e.target.matches('[data-selectall]')) { e.target.select(); return; }
+        // מחיקת מוצר מותאם או הסרת תמונה שלו
+        const rmBtn = e.target.closest('[data-cp-del]');
+        if (rmBtn) {
+          const id = rmBtn.closest('[data-cp]').dataset.cp;
+          const cp = f.customProducts.find(x => x.id === id);
+          if (cp && confirm(`למחוק את המוצר "${cp.name || 'ללא שם'}"?`)) { f.customProducts = f.customProducts.filter(x => x.id !== id); A.commit('המוצר נמחק'); }
+          return;
+        }
+        const rmImg = e.target.closest('[data-cp-rmimg]');
+        if (rmImg) {
+          const id = rmImg.closest('[data-cp]').dataset.cp;
+          const cp = f.customProducts.find(x => x.id === id);
+          if (cp) { cp.image = ''; A.commit('התמונה הוסרה'); }
+          return;
+        }
         const b = e.target.closest('[data-act],[data-unblock]'); if (!b) return;
         if (b.dataset.unblock) { f.blocked = f.blocked.filter(d => d !== b.dataset.unblock); A.commit(); return; }
         const act = b.dataset.act;
@@ -292,7 +356,54 @@
         if (act === 'publish') { const ok = await F.publish(true); A.toast(ok ? 'הטופס עודכן' : 'הפרסום נכשל — בדקי אינטרנט'); }
         if (act === 'block') { const d = main.querySelector('#blockDate').value; if (d && !f.blocked.includes(d)) { f.blocked.push(d); A.commit('התאריך נסגר להזמנות'); } }
         if (act === 'notif') { try { const p = await Notification.requestPermission(); A.toast(p === 'granted' ? 'התראות הופעלו' : 'ההתראות לא אושרו בדפדפן'); A.refresh(); } catch (err) { } }
+        // כפתורי bulk למתכונים
+        if (act === 'selectAll' || act === 'deselectAll') {
+          const on = act === 'selectAll';
+          recipes.forEach(r => { f.products[r.id] = f.products[r.id] || {}; f.products[r.id].on = on; });
+          A.commit(on ? 'כל המוצרים מופיעים בטופס' : 'כל המוצרים הוסרו מהטופס');
+        }
+        // מוצרים מותאמים
+        if (act === 'cpAdd') {
+          f.customProducts.push({ id: U.uid(), name: '', desc: '', price: 0, image: '', unit: '', cat: '', options: [], allergens: [], maxQty: 20, on: true });
+          A.commit('מוצר חדש נוסף');
+        }
+        if (act === 'cpSelectAll') {
+          f.customProducts.forEach(cp => cp.on = true);
+          A.commit('כל המוצרים המותאמים מוצגים');
+        }
+        if (act === 'cpDeleteSelected') {
+          const toRemove = f.customProducts.filter(cp => cp.on === false || cp._selected);
+          if (!toRemove.length) { A.toast('לא נבחרו מוצרים (כבי "מוצג" במוצרים שברצונך למחוק)'); return; }
+          if (confirm(`למחוק ${toRemove.length} מוצרים מותאמים אישית?`)) {
+            f.customProducts = f.customProducts.filter(cp => !(cp.on === false || cp._selected));
+            A.commit('המוצרים נמחקו');
+          }
+        }
       };
+      main.onchange = (prev => async e => {
+        // קובץ תמונה למוצר מותאם
+        if (e.target.matches('[data-cp-img]')) {
+          const tr = e.target.closest('[data-cp]');
+          const id = tr.dataset.cp, cp = f.customProducts.find(x => x.id === id);
+          const file = e.target.files[0]; if (!cp || !file) return;
+          try { cp.image = await A.readImage(file, 600); A.commit('התמונה נשמרה'); }
+          catch (err) { A.toast('לא הצלחתי לקרוא את התמונה'); }
+          return;
+        }
+        // שדה במוצר מותאם
+        const tr = e.target.closest('[data-cp]');
+        if (tr && e.target.dataset.cpk) {
+          const cp = f.customProducts.find(x => x.id === tr.dataset.cp); if (!cp) return;
+          const k = e.target.dataset.cpk;
+          if (k === 'on') cp.on = e.target.checked;
+          else if (k === 'options') cp.options = e.target.value.split(/[,،]/).map(x => x.trim()).filter(Boolean);
+          else if (k === 'price' || k === 'maxQty') cp[k] = e.target.value === '' ? '' : U.num(e.target.value);
+          else cp[k] = e.target.value.trim();
+          A.save(); A.toast('נשמר — מתעדכן בטופס');
+          return;
+        }
+        return prev(e);
+      })(main.onchange);
     }
   };
   function drawQr(link) {

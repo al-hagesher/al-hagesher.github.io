@@ -4,7 +4,7 @@
 
   const defaultCoupon = () => ({
     id: U.uid(), code: '', type: 'percent', value: 10,
-    minOrder: 0, from: '', to: '', maxUses: 0, uses: 0, active: true, note: ''
+    minOrder: 0, from: '', to: '', maxUses: 0, uses: 0, active: true, note: '', firstOrderOnly: false
   });
 
   const describe = c => {
@@ -25,6 +25,20 @@
     return { label: 'פעיל', cls: 'ok' };
   };
 
+  function buildFormLink(code) {
+    const f = A.state.form; if (!f || !f.enabled || !f.slug) return '';
+    return `${A.PUBLIC_BASE}order.html?f=${f.slug}&coupon=${encodeURIComponent(code)}`;
+  }
+  function buildWaShareText(c) {
+    const link = buildFormLink(c.code);
+    const biz = A.state.settings.businessName || 'על הגשר';
+    const val = c.type === 'percent' ? `${+c.value || 0}%` : U.money(+c.value || 0);
+    const firstLine = c.firstOrderOnly
+      ? `🎁 מתנה לחברות הקבוצה: ${val} הנחה על ההזמנה הראשונה שלך ב${biz}!`
+      : `🎁 מתנה ללקוחות הקבוצה: ${val} הנחה בהזמנה הבאה ב${biz}!`;
+    return `${firstLine}\n\nהקוד שלך: *${c.code}*\n${c.minOrder ? `(מינימום הזמנה ${U.money(c.minOrder)})\n` : ''}${link ? `\nלחצי כאן והקוד יתמלא לבד: ${link}\n` : ''}\nמחכים לך 🤎`;
+  }
+
   P.coupons = {
     title: 'קופונים',
     render(main) {
@@ -41,18 +55,24 @@
             <thead><tr><th style="text-align:start">קוד</th><th style="text-align:start">הנחה</th><th style="text-align:start">תוקף</th><th style="text-align:start">שימושים</th><th style="text-align:start">סטטוס</th><th></th></tr></thead>
             <tbody>${list.map(c => {
               const st = status(c);
+              const link = buildFormLink(c.code);
+              const waText = buildWaShareText(c);
               return `<tr data-id="${c.id}" style="cursor:pointer">
-                <td><b>${U.esc(c.code || '—')}</b>${c.note ? `<div class="small muted">${U.esc(c.note)}</div>` : ''}</td>
+                <td><b>${U.esc(c.code || '—')}</b>${c.firstOrderOnly ? ' <span class="badge warn" style="font-size:.7rem">הזמנה ראשונה</span>' : ''}${c.note ? `<div class="small muted">${U.esc(c.note)}</div>` : ''}</td>
                 <td>${c.type === 'percent' ? (+c.value || 0) + '%' : U.money(+c.value || 0)}${c.minOrder ? `<div class="small muted">מעל ${U.money(c.minOrder)}</div>` : ''}</td>
                 <td class="small">${[c.from && U.fmtDate(c.from), c.to && U.fmtDate(c.to)].filter(Boolean).join(' – ') || '<span class="muted">ללא הגבלה</span>'}</td>
                 <td class="small">${c.maxUses ? `${c.uses || 0} / ${c.maxUses}` : (c.uses || 0)}</td>
                 <td><span class="badge ${st.cls}">${st.label}</span></td>
-                <td style="text-align:end"><button class="icon-btn" data-edit="${c.id}" aria-label="עריכה">${A.icon('edit')}</button></td>
+                <td style="text-align:end;white-space:nowrap">
+                  ${link ? `<a class="icon-btn wa" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent(waText)}" aria-label="שיתוף בוואטסאפ" title="שיתוף בוואטסאפ עם קישור מילוי אוטומטי">${A.icon('msg')}</a>` : ''}
+                  <button class="icon-btn" data-edit="${c.id}" aria-label="עריכה">${A.icon('edit')}</button>
+                </td>
               </tr>`;
             }).join('')}</tbody>
           </table>` : `<div class="empty"><h3>אין קופונים</h3><p>צרי קוד הנחה שלקוחות יוכלו להשתמש בו בטופס ההזמנה.</p><button class="btn" data-act="new">${A.icon('plus')}קופון ראשון</button></div>`}
         </div>`;
       main.onclick = e => {
+        if (e.target.closest('a[href]')) return; // לא לפתוח עריכה כשלוחצים על קישור שיתוף
         const b = e.target.closest('[data-act],[data-edit],[data-id]'); if (!b) return;
         if (b.dataset.act === 'new') editCoupon(null);
         else if (b.dataset.edit) editCoupon(A.state.coupons.find(c => c.id === b.dataset.edit));
@@ -75,6 +95,7 @@
         <label class="field"><span>בתוקף מתאריך (אופציונלי)</span><input type="date" name="from" value="${d.from || ''}"></label>
         <label class="field"><span>בתוקף עד תאריך (אופציונלי)</span><input type="date" name="to" value="${d.to || ''}"></label>
         <label class="field" style="grid-column:span 2"><input type="checkbox" name="active"${d.active !== false ? ' checked' : ''}> קופון פעיל</label>
+        <label class="field" style="grid-column:span 2"><input type="checkbox" name="firstOrderOnly"${d.firstOrderOnly ? ' checked' : ''}> להזמנה ראשונה של לקוחה חדשה בלבד <small class="muted">(מיועד לקוד "הצטרפת לקבוצה" — המערכת בודקת שאין הזמנות קודמות ממספר הטלפון)</small></label>
         ${!isNew && (d.uses || 0) > 0 ? `<p class="muted small" style="grid-column:span 2">נוצל ${d.uses} פעמים</p>` : ''}
       </div>`,
       foot: `<button class="btn" data-save>${A.icon('check')}שמירה</button>${!isNew ? `<button class="btn danger" data-del>${A.icon('trash')}מחיקה</button>` : ''}<button class="btn ghost" data-close>ביטול</button>`,
@@ -96,7 +117,8 @@
               code, type, value: +v.value || 0,
               minOrder: +v.minOrder || 0, maxUses: +v.maxUses || 0,
               from: v.from || '', to: v.to || '',
-              active: !!v.active, note: v.note || ''
+              active: !!v.active, note: v.note || '',
+              firstOrderOnly: !!v.firstOrderOnly
             });
             if (isNew) A.state.coupons.push(target);
             A.commit(isNew ? 'הקופון נוסף' : 'הקופון עודכן');

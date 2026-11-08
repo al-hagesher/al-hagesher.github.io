@@ -340,6 +340,7 @@ tfoot td { font-weight: 700; border-top: 2px solid var(--line-2); }
 .msg-tool details summary { cursor: pointer; }
 .msg-tool pre { background: var(--cream); padding: 8px; border-radius: 6px; overflow-x: auto; max-height: 200px; overflow-y: auto; }
 .msg-approval { align-self: center; max-width: 95%; background: var(--sand); border: 2px solid var(--brown); border-radius: 12px; padding: 12px 16px; font-weight: 500; }
+.msg-approval.resolved { background: transparent; border: 1px solid var(--line); color: var(--muted); font-weight: 400; font-size: .88rem; padding: 6px 12px; }
 
 /* שלב במתכון — טיימר בצד */
 .step-line { display: flex; gap: 10px; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; }

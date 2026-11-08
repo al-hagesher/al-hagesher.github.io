@@ -41,8 +41,9 @@
 **איך לענות:**
 - בעברית, תמציתית וממוקדת.
 - השתמשי בכלים לקבל נתונים מעודכנים לפני תשובה — הסנאפשוט שלמטה חלקי בלבד.
-- כשמבקשים ממך לבצע פעולה, השתמשי בכלי המתאים. פעולות הרסניות ידרשו אישור של הדסה.
-- אם חסר מידע, בקשי אותו במפורש במקום לנחש.
+- כשמבקשים ממך לבצע פעולה, **קראי מיד לכלי המתאים** — אל תבקשי אישור בטקסט. פעולות הרסניות מציגות אוטומטית דיאלוג אישור ב-UI, אז אל תשאלי "את בטוחה?" לפני — פשוט קראי לכלי.
+- אם חסר מידע חיוני לפעולה (למשל "תמחקי הזמנה" בלי לדעת של מי), תחפשי קודם עם list_orders.
+- אם שם של פריט דו-משמעי, בקשי הבהרה.
 
 **תאריך היום:** ${new Date().toISOString().slice(0, 10)}
 
@@ -116,16 +117,65 @@ ${JSON.stringify(stateSnapshot(), null, 2)}
     },
 
     update_order_status: {
-      description: 'שינוי סטטוס להזמנה.',
+      description: 'שינוי סטטוס להזמנה (כולל ביטול — עדיף על delete_order).',
       input_schema: { type: 'object', required: ['order_id', 'status'], properties: {
         order_id: { type: 'string' },
-        status: { type: 'string', enum: ['new', 'confirmed', 'baking', 'ready', 'delivered'] }
+        status: { type: 'string', enum: ['new', 'confirmed', 'baking', 'ready', 'delivered', 'cancelled'] }
       } },
       execute(args) {
         const o = A.state.orders.find(x => x.id === args.order_id || x.num == args.order_id);
         if (!o) return JSON.stringify({ error: 'הזמנה לא נמצאה' });
         const prev = o.status; o.status = args.status; saveState('סטטוס עודכן');
         return JSON.stringify({ ok: true, order_num: o.num, from: prev, to: o.status });
+      }
+    },
+
+    shopping_list: {
+      description: 'רשימת קניות למצרכים הנדרשים לכל ההזמנות בטווח תאריכים. מחשב כמויות לפי מתכונים.',
+      input_schema: { type: 'object', properties: {
+        from_date: { type: 'string', description: 'YYYY-MM-DD (ברירת מחדל: היום)' },
+        to_date: { type: 'string', description: 'YYYY-MM-DD (ברירת מחדל: היום + 7)' }
+      } },
+      execute(args) {
+        const from = args.from_date || U.today();
+        const to = args.to_date || U.addDays(from, 7);
+        const orders = A.state.orders.filter(o => o.status !== 'cancelled' && o.date >= from && o.date <= to);
+        const needed = {};
+        orders.forEach(o => o.items.forEach(item => {
+          if (!item.recipeId) return;
+          const r = C.recipe(item.recipeId); if (!r) return;
+          const factor = (+item.qty || 0) / (+r.yield || 1);
+          (r.ingredients || []).forEach(l => {
+            if (!l.ingId) return;
+            const key = l.ingId;
+            needed[key] = needed[key] || { ingId: l.ingId, name: (C.ing(l.ingId) || {}).name || '?', unit: l.unit, qty: 0 };
+            needed[key].qty += (+l.qty || 0) * factor;
+          });
+        }));
+        const items = Object.values(needed).map(n => {
+          const ing = C.ing(n.ingId) || {};
+          const stock = +ing.stock || 0;
+          return { name: n.name, needed: Math.round(n.qty * 100) / 100, unit: n.unit, stock, shortBy: Math.max(0, Math.round((n.qty - stock) * 100) / 100) };
+        }).filter(x => x.shortBy > 0).sort((a, b) => b.shortBy - a.shortBy);
+        return JSON.stringify({ from, to, orderCount: orders.length, missing: items.length ? items : 'כל המצרכים קיימים במחסן' });
+      }
+    },
+
+    today_summary: {
+      description: 'סיכום היום: כמה הזמנות למסירה, כמה הכנסה צפויה, רשימת הזמנות עם שעות, התראות.',
+      input_schema: { type: 'object', properties: {} },
+      execute() {
+        const today = U.today();
+        const todays = A.state.orders.filter(o => o.date === today && o.status !== 'cancelled');
+        const totals = todays.reduce((s, o) => { const t = C.orderTotals(o); s.revenue += t.total; s.balance += t.balance; return s; }, { revenue: 0, balance: 0 });
+        const byTime = todays.sort((a, b) => (a.time || '99:99').localeCompare(b.time || '99:99'))
+          .map(o => ({ num: o.num, time: o.time || '—', customer: o.customerName, method: o.method, items: o.items.map(i => i.qty + '× ' + i.name).join(', '), status: o.status, total: C.orderTotals(o).total }));
+        return JSON.stringify({
+          today, orderCount: todays.length,
+          revenue: totals.revenue, outstanding: totals.balance,
+          orders: byTime,
+          unpaidOrdersAcrossAll: A.state.orders.filter(o => o.status !== 'cancelled' && C.orderTotals(o).balance > 0.01).length
+        });
       }
     },
 
@@ -205,13 +255,19 @@ ${JSON.stringify(stateSnapshot(), null, 2)}
 
     change_recipe_price: {
       approval: 'confirm',
-      description: 'שינוי מחיר מתכון. פעולה רגישה — משפיע על תמחור ללקוחות.',
-      input_schema: { type: 'object', required: ['recipe_name', 'new_price'], properties: {
-        recipe_name: { type: 'string' }, new_price: { type: 'number' }
+      description: 'שינוי מחיר מתכון. פעולה רגישה — משפיע על תמחור ללקוחות. עדיף להעביר את ה-recipe_id המדויק (לא שם).',
+      input_schema: { type: 'object', required: ['recipe_id_or_name', 'new_price'], properties: {
+        recipe_id_or_name: { type: 'string', description: 'ID של המתכון, או שם מדויק' }, new_price: { type: 'number' }
       } },
       execute(args) {
-        const r = A.state.recipes.find(x => (x.name || '').includes(args.recipe_name));
-        if (!r) return JSON.stringify({ error: 'מתכון לא נמצא' });
+        const q = args.recipe_id_or_name;
+        let r = A.state.recipes.find(x => x.id === q);
+        if (!r) r = A.state.recipes.find(x => x.name === q);
+        if (!r) {
+          const matches = A.state.recipes.filter(x => (x.name || '').includes(q));
+          if (matches.length !== 1) return JSON.stringify({ error: matches.length ? 'שם דו-משמעי — תני ID' : 'מתכון לא נמצא', matches: matches.map(m => ({ id: m.id, name: m.name })) });
+          r = matches[0];
+        }
         const prev = r.price; r.price = args.new_price; saveState('מחיר עודכן');
         return JSON.stringify({ ok: true, recipe: r.name, from: prev, to: r.price });
       }
@@ -295,6 +351,8 @@ ${JSON.stringify(stateSnapshot(), null, 2)}
     }
     if (m.type === 'loading') return `<div class="msg msg-a loading"><span></span><span></span><span></span></div>`;
     if (m.type === 'approval') {
+      if (m.resolved === 'yes') return `<div class="msg msg-approval resolved">✓ אושר: ${U.esc(approvalText(m.toolName, m.input))}</div>`;
+      if (m.resolved === 'no') return `<div class="msg msg-approval resolved">✗ בוטל: ${U.esc(approvalText(m.toolName, m.input))}</div>`;
       return `<div class="msg msg-approval" data-approval-id="${m._id}">❓ ${U.esc(approvalText(m.toolName, m.input))}<div class="row" style="margin-top:8px;gap:8px"><button class="btn sm" data-apr-yes>${A.icon('check')}אשר</button><button class="btn sm ghost" data-apr-no>${A.icon('x')}בטל</button></div></div>`;
     }
     return '';
@@ -332,8 +390,8 @@ ${JSON.stringify(stateSnapshot(), null, 2)}
         const id = el.dataset.approvalId;
         const pendingMsg = uiMsgs.find(m => m._id === id);
         if (!pendingMsg || !pendingMsg.resolve) return;
-        el.querySelector('[data-apr-yes]').onclick = () => { const r = pendingMsg.resolve; pendingMsg.resolve = null; el.innerHTML = '✓ מאושר'; r(true); };
-        el.querySelector('[data-apr-no]').onclick = () => { const r = pendingMsg.resolve; pendingMsg.resolve = null; el.innerHTML = '✗ בוטל'; r(false); };
+        el.querySelector('[data-apr-yes]').onclick = () => { const r = pendingMsg.resolve; pendingMsg.resolve = null; pendingMsg.resolved = 'yes'; redrawChat(); r(true); };
+        el.querySelector('[data-apr-no]').onclick = () => { const r = pendingMsg.resolve; pendingMsg.resolve = null; pendingMsg.resolved = 'no'; redrawChat(); r(false); };
       });
     };
 

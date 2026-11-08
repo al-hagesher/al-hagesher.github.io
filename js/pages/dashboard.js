@@ -79,6 +79,15 @@
               <button class="btn soft" data-act="receipt">${A.icon('image')}קבלה</button>
               <a class="btn soft" href="#/wheel">${A.icon('wheel')}גלגל החיים</a>
             </div></div>
+          <a class="card cables" href="#/assistant" style="text-decoration:none;color:inherit;display:block">
+            <div class="row" style="gap:12px;align-items:center">
+              <div style="width:44px;height:44px;border-radius:50%;background:var(--brown);color:var(--cream);display:flex;align-items:center;justify-content:center;font-size:1.4rem;flex-shrink:0">🤖</div>
+              <div>
+                <h3 style="margin:0">שאלי את העוזרת שלך</h3>
+                <p class="small muted" style="margin:2px 0 0">"מה הכי רווחי?" · "מה חסר במחסן?" · "תיצרי קופון…"</p>
+              </div>
+            </div>
+          </a>
           ${lastWheel ? (() => { const e = A.state.wheel.entries.find(x => x.date === lastWheel); return e && e.focus ? `<div class="card cables"><div class="muted small">הצעד שבחרת בגלגל החיים</div><p style="font-family:var(--serif);font-size:1.2rem;color:var(--brown);margin:6px 0 0">${U.esc(e.focus)}</p></div>` : ''; })() : ''}
         </div>
       </div>`;

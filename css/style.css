@@ -340,6 +340,11 @@ tfoot td { font-weight: 700; border-top: 2px solid var(--line-2); }
 .msg-tool details summary { cursor: pointer; }
 .msg-tool pre { background: var(--cream); padding: 8px; border-radius: 6px; overflow-x: auto; max-height: 200px; overflow-y: auto; }
 .msg-approval { align-self: center; max-width: 95%; background: var(--sand); border: 2px solid var(--brown); border-radius: 12px; padding: 12px 16px; font-weight: 500; }
+.msg-img { display: block; max-width: 220px; max-height: 320px; border-radius: 8px; margin-bottom: 6px; object-fit: cover; }
+.chat-attach { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.chat-attach-item { position: relative; display: inline-block; }
+.chat-attach-item img { max-width: 120px; max-height: 120px; border-radius: 8px; border: 1px solid var(--line); object-fit: cover; }
+.chat-attach-item .icon-btn { position: absolute; top: -8px; right: -8px; background: var(--bad); color: #fff; border-radius: 50%; padding: 4px; width: 24px; height: 24px; }
 .msg-approval.resolved { background: transparent; border: 1px solid var(--line); color: var(--muted); font-weight: 400; font-size: .88rem; padding: 6px 12px; }
 
 /* שלב במתכון — טיימר בצד */

@@ -45,6 +45,8 @@
 - אם חסר מידע חיוני לפעולה (למשל "תמחקי הזמנה" בלי לדעת של מי), תחפשי קודם עם list_orders.
 - אם שם של פריט דו-משמעי, בקשי הבהרה.
 
+**סריקת קבלה:** אם המשתמש שלחה תמונה של קבלה/חשבונית, זהי לכל פריט: שם המצרך, מחיר כולל, גודל האריזה (ק״ג/גרם/ליטר). השוי מול רשימת המצרכים בסנאפשוט — התאמה גם אם השם לא זהה (למשל "חמאת תנובה 200ג" מתאים ל"חמאה"). לכל פריט שזיהית, קראי ל-update_ingredient_price עם pkg_price = המחיר הכולל, pkg_size + pkg_unit מהגודל האמיתי של האריזה שקנתה. הדיאלוג יבקש אישור לכל אחד. אם מצרך לא קיים — יצרי עם category מתאימה. סכמי בסוף מה עודכן ומה נוצר.
+
 **תאריך היום:** ${new Date().toISOString().slice(0, 10)}
 
 **Snapshot חלקי של המערכת:**
@@ -324,6 +326,40 @@ ${JSON.stringify(stateSnapshot(), null, 2)}
       }
     },
 
+    update_ingredient_price: {
+      approval: 'confirm',
+      description: 'עדכון מחיר ומידת אריזה של מצרך קיים (אחרי סריקת קבלה או קנייה). אם המצרך לא קיים — יישלחו גם name+category והוא ייווצר. פעולה רגישה — משפיעה על חישוב עלות של כל המתכונים.',
+      input_schema: { type: 'object', required: ['name', 'pkg_price'], properties: {
+        name: { type: 'string', description: 'שם המצרך (חייב להיות זהה לקיים אם רוצים לעדכן קיים)' },
+        pkg_price: { type: 'number', description: 'מחיר האריזה בשקלים (למשל: ק״ג קמח = 7)' },
+        pkg_size: { type: 'number', description: 'גודל האריזה (למשל: 1 עבור ק״ג, 500 עבור חבילת 500 גרם)' },
+        pkg_unit: { type: 'string', enum: ['kg', 'g', 'l', 'ml', 'unit'], description: 'יחידת האריזה' },
+        category: { type: 'string', description: 'קטגוריה אם המצרך חדש (קמחים/סוכרים/שמרים ואפייה/נוזלים/חלבי/שומנים/ביצים/שוקולד וקקאו/טעמים ותמציות/פירות ואגוזים/חוטי קישוט ואריזות/אחר)' },
+        allergens: { type: 'array', items: { type: 'string' } },
+        supplier: { type: 'string', description: 'שם ספק (למשל: מחסני קניוקנ)' },
+        stock_add: { type: 'number', description: 'כמה להוסיף למלאי (ביחידות של האריזה, אופציונלי)' }
+      } },
+      execute(args) {
+        let i = A.state.ingredients.find(x => x.name === args.name);
+        const created = !i;
+        if (!i) {
+          if (!args.category) return JSON.stringify({ error: 'מצרך חדש — נדרש גם category' });
+          i = { id: U.uid(), name: args.name, category: args.category, pkgPrice: 0, pkgSize: 1, pkgUnit: 'kg', gramsPerCup: 240, gramsPerUnit: 0, allergens: [], stock: 0, minStock: 0, supplier: '', estimated: false };
+          A.state.ingredients.push(i);
+        }
+        const prev = { pkgPrice: i.pkgPrice, pkgSize: i.pkgSize, pkgUnit: i.pkgUnit };
+        i.pkgPrice = +args.pkg_price;
+        if (args.pkg_size) i.pkgSize = +args.pkg_size;
+        if (args.pkg_unit) i.pkgUnit = args.pkg_unit;
+        if (args.allergens) i.allergens = args.allergens;
+        if (args.supplier) i.supplier = args.supplier;
+        if (args.stock_add) i.stock = (+i.stock || 0) + +args.stock_add;
+        i.estimated = false;
+        saveState(created ? 'מצרך נוסף' : 'מחיר עודכן');
+        return JSON.stringify({ ok: true, name: i.name, created, from: prev, to: { pkgPrice: i.pkgPrice, pkgSize: i.pkgSize, pkgUnit: i.pkgUnit } });
+      }
+    },
+
     create_coupon: {
       description: 'יצירת קופון חדש.',
       input_schema: { type: 'object', required: ['code', 'type', 'value'], properties: {
@@ -396,7 +432,8 @@ ${JSON.stringify(stateSnapshot(), null, 2)}
       delete_order: `למחוק הזמנה #${input.order_id} לצמיתות? לא ניתן לשחזר.`,
       delete_coupon: `למחוק את הקופון "${input.code}" לצמיתות?`,
       change_recipe_price: `לשנות את המחיר של "${input.recipe_id_or_name || input.recipe_name}" ל-${U.money(+input.new_price)}?`,
-      update_recipe: `לעדכן את המתכון "${input.recipe_id_or_name}"${input.name ? ` → שם: ${input.name}` : ''}${input.price != null ? ` → מחיר: ${U.money(+input.price)}` : ''}${input.add_steps ? ` → ${input.add_steps.length} שלבים חדשים` : ''}${input.add_ingredients ? ` → ${input.add_ingredients.length} מצרכים חדשים` : ''}?`
+      update_recipe: `לעדכן את המתכון "${input.recipe_id_or_name}"${input.name ? ` → שם: ${input.name}` : ''}${input.price != null ? ` → מחיר: ${U.money(+input.price)}` : ''}${input.add_steps ? ` → ${input.add_steps.length} שלבים חדשים` : ''}${input.add_ingredients ? ` → ${input.add_ingredients.length} מצרכים חדשים` : ''}?`,
+      update_ingredient_price: `לעדכן את המחיר של "${input.name}": ${U.money(+input.pkg_price)}${input.pkg_size ? ` ל-${input.pkg_size} ${({g:'גרם', kg:'ק״ג', ml:'מ״ל', l:'ליטר', unit:'יחידות'})[input.pkg_unit] || input.pkg_unit}` : ''}${input.supplier ? ` (${input.supplier})` : ''}?`
     };
     return descs[name] || `לבצע ${name}?`;
   }
@@ -453,7 +490,11 @@ ${JSON.stringify(stateSnapshot(), null, 2)}
   }
 
   function renderMsg(m) {
-    if (m.type === 'user') return `<div class="msg msg-u">${U.esc(m.text).replace(/\n/g, '<br>')}</div>`;
+    if (m.type === 'user') {
+      const img = m.image ? `<img src="${m.image}" class="msg-img" alt="תמונה">` : '';
+      const text = m.text && m.text !== '(תמונה)' ? U.esc(m.text).replace(/\n/g, '<br>') : '';
+      return `<div class="msg msg-u">${img}${text}</div>`;
+    }
     if (m.type === 'text') {
       let html = U.esc(m.text);
       html = html.replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>');
@@ -488,13 +529,22 @@ ${JSON.stringify(stateSnapshot(), null, 2)}
         </div>
         <div id="chat" class="chat-box">${persistent.length ? persistent.map(renderMsg).join('') : `<div class="chat-empty"><p class="muted">הי! אני יכולה לעזור לך עם ניתוח הזמנות, תמחור, עדכון סטטוס, יצירת קופונים ועוד.</p><div class="chat-suggestions">${suggestions().map(s => `<button class="btn ghost sm" data-suggest="${U.esc(s)}">${U.esc(s)}</button>`).join('')}</div></div>`}</div>
         <form id="chatForm" class="chat-input">
-          <textarea id="chatIn" rows="1" placeholder="מה תרצי לדעת או לבצע?" autofocus></textarea>
+          <label class="btn ghost sm" style="flex-shrink:0;cursor:pointer" aria-label="צילום קבלה">${A.icon('image')}<input type="file" accept="image/*" capture="environment" id="chatImg" hidden></label>
+          <textarea id="chatIn" rows="1" placeholder="מה תרצי לדעת או לבצע? (אפשר גם לצלם קבלה)" autofocus></textarea>
           <button class="btn" type="submit" id="chatSend">${A.icon('msg')}שליחה</button>
         </form>
+        <div id="chatAttach" class="chat-attach"></div>
       </div>`;
 
     const chatBox = main.querySelector('#chat'), input = main.querySelector('#chatIn'), form = main.querySelector('#chatForm'), sendBtn = main.querySelector('#chatSend');
+    const imgInput = main.querySelector('#chatImg'), attachBox = main.querySelector('#chatAttach');
+    let pendingImage = null; // { data: base64, media_type: '...' }
     chatBox.scrollTop = chatBox.scrollHeight;
+
+    const renderAttach = () => {
+      if (!pendingImage) { attachBox.innerHTML = ''; return; }
+      attachBox.innerHTML = `<div class="chat-attach-item"><img src="data:${pendingImage.media_type};base64,${pendingImage.data}" alt="תמונה"><button type="button" class="icon-btn" data-rm-img aria-label="הסרת תמונה">${A.icon('x')}</button></div>`;
+    };
 
     const uiMsgs = persistent.slice();
     let apiMsgs = loadApiMessages();
@@ -521,10 +571,19 @@ ${JSON.stringify(stateSnapshot(), null, 2)}
     const uiReplaceLoading = () => { const i = uiMsgs.findIndex(m => m.type === 'loading'); if (i >= 0) uiMsgs.splice(i, 1); redrawChat(); };
 
     const send = async text => {
-      if (!text || sendBtn.disabled) return;
-      uiMsgs.push({ type: 'user', text });
+      if ((!text && !pendingImage) || sendBtn.disabled) return;
+      const hasImage = !!pendingImage;
+      uiMsgs.push({ type: 'user', text: text || '(תמונה)', image: pendingImage ? `data:${pendingImage.media_type};base64,${pendingImage.data}` : null });
       saveChat(uiMsgs.filter(x => persistTypes.includes(x.type)));
-      apiMsgs.push({ role: 'user', content: text });
+      const promptForReceipt = 'סרקי את הקבלה הזו: זהי את שם הספק, את כל המצרכים ומחיריהם, ואז השוי מול המצרכים שבמחסן. לכל מצרך שמצאת, קראי ל-update_ingredient_price עם המחיר והמידות המעודכנים. סכמי מה עודכן בסוף.';
+      const userContent = hasImage
+        ? [
+            { type: 'image', source: { type: 'base64', media_type: pendingImage.media_type, data: pendingImage.data } },
+            { type: 'text', text: text || promptForReceipt }
+          ]
+        : text;
+      apiMsgs.push({ role: 'user', content: userContent });
+      pendingImage = null; renderAttach();
       redrawChat();
       sendBtn.disabled = true; input.disabled = true;
       try {
@@ -542,12 +601,38 @@ ${JSON.stringify(stateSnapshot(), null, 2)}
     form.onsubmit = e => { e.preventDefault(); send(input.value.trim()); };
     input.oninput = () => { input.style.height = 'auto'; input.style.height = Math.min(input.scrollHeight, 180) + 'px'; };
     input.onkeydown = e => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); form.requestSubmit(); } };
+    imgInput.onchange = async () => {
+      const file = imgInput.files[0]; if (!file) return;
+      try {
+        const compressed = await compressImage(file);
+        pendingImage = compressed;
+        renderAttach();
+      } catch (err) { A.toast('לא הצלחתי לקרוא את התמונה'); }
+      imgInput.value = '';
+    };
     main.onclick = e => {
       const s = e.target.closest('[data-suggest]'); if (s) { input.value = s.dataset.suggest; send(s.dataset.suggest); return; }
+      if (e.target.closest('[data-rm-img]')) { pendingImage = null; renderAttach(); return; }
     };
     document.getElementById('topActions').onclick = e => {
       if (e.target.closest('[data-act=clear]')) { saveChat([]); saveApiMessages([]); A.refresh(); }
     };
+  }
+
+  // דוחסים תמונה ל-base64 לפני שליחה (עד 1600px, JPEG 0.8)
+  async function compressImage(file) {
+    const url = URL.createObjectURL(file);
+    const img = new Image(); img.src = url;
+    await new Promise((res, rej) => { img.onload = res; img.onerror = rej; });
+    URL.revokeObjectURL(url);
+    const MAX = 1600;
+    let w = img.naturalWidth, h = img.naturalHeight;
+    if (w > MAX || h > MAX) { const r = Math.min(MAX / w, MAX / h); w = Math.round(w * r); h = Math.round(h * r); }
+    const canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h;
+    canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+    const data = dataUrl.split(',')[1];
+    return { data, media_type: 'image/jpeg' };
   }
 
   function suggestions() {

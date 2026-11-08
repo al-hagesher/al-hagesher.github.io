@@ -178,7 +178,7 @@
   function printSlip(o) {
     const t = C.orderTotals(o), w = root.open('', '_blank');
     if (!w) return A.toast('הדפדפן חסם חלון — אפשרי חלונות קופצים');
-    w.document.write(`<html dir="rtl" lang="he"><head><meta charset="utf-8"><title>הזמנה ${o.num}</title><style>body{font-family:Assistant,Arial;max-width:380px;margin:20px auto;color:#2f1d11}h2{font-family:'Frank Ruhl Libre',serif;color:#4a2a16;margin:6px 0}td{padding:4px 0}.n{text-align:left}hr{border:0;border-top:1px dashed #b8875e}</style></head><body>
+    w.document.write(`<html dir="rtl" lang="he"><head><meta charset="utf-8"><title>הזמנה ${o.num}</title><style>body{font-family:Assistant,Arial;max-width:380px;margin:20px auto;color:#2f1d11}h2{font-family:'Frank Ruhl Libre',serif;color:#3b2d1e;margin:6px 0}td{padding:4px 0}.n{text-align:left}hr{border:0;border-top:1px dashed #a8805a}</style></head><body>
       <div style="text-align:center"><img src="${new URL('assets/logo.png', location.href)}" style="width:150px"></div>
       <h2>הזמנה #${o.num}</h2><div>${U.esc(o.customerName)} · <span dir="ltr">${U.esc(o.phone || '')}</span></div>
       <div>${U.dayName(o.date)} ${U.fmtDate(o.date)} ${o.time || ''} · ${o.method === 'delivery' ? 'משלוח: ' + U.esc(o.address || '') : 'איסוף עצמי'}</div><hr>
@@ -223,11 +223,11 @@
       <style>
         * { box-sizing: border-box; }
         body { font-family: 'Assistant', Arial, sans-serif; color: #2f1d11; max-width: 820px; margin: 0 auto; padding: 24px; line-height: 1.45; }
-        h1 { font-family: 'Frank Ruhl Libre', serif; color: #4a2a16; margin: 0 0 4px; font-size: 1.8rem; }
+        h1 { font-family: 'Frank Ruhl Libre', serif; color: #3b2d1e; margin: 0 0 4px; font-size: 1.8rem; }
         .topline { color: #8a7462; margin-bottom: 20px; }
         .summary { background: #f7efe5; border-radius: 12px; padding: 14px 18px; margin-bottom: 22px; display: flex; gap: 22px; flex-wrap: wrap; font-size: .95rem; }
-        .summary b { color: #4a2a16; }
-        h2 { font-family: 'Frank Ruhl Libre', serif; color: #4a2a16; border-bottom: 2px solid #b8875e; padding-bottom: 4px; margin: 28px 0 10px; font-size: 1.3rem; }
+        .summary b { color: #3b2d1e; }
+        h2 { font-family: 'Frank Ruhl Libre', serif; color: #3b2d1e; border-bottom: 2px solid #a8805a; padding-bottom: 4px; margin: 28px 0 10px; font-size: 1.3rem; }
         .muted { color: #8a7462; font-weight: 400; font-size: .9em; }
         .ord { border: 1px solid #e8ddd0; border-radius: 10px; padding: 10px 14px; margin-bottom: 10px; page-break-inside: avoid; break-inside: avoid; }
         .ord header { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 4px; }
@@ -240,7 +240,7 @@
         .ord .bal { color: #b00020; }
         .empty { color: #8a7462; font-style: italic; padding: 6px 10px; }
         .foot { margin-top: 30px; text-align: center; color: #8a7462; font-size: .85rem; }
-        .print-btn { position: fixed; top: 16px; left: 16px; background: #4a2a16; color: #fff8ef; border: 0; padding: 10px 18px; border-radius: 10px; font-size: 1rem; cursor: pointer; font-family: inherit; }
+        .print-btn { position: fixed; top: 16px; left: 16px; background: #3b2d1e; color: #fff8ef; border: 0; padding: 10px 18px; border-radius: 10px; font-size: 1rem; cursor: pointer; font-family: inherit; }
         @media print {
           .print-btn { display: none; }
           body { padding: 12px; }
@@ -374,7 +374,7 @@
           const msgEl = w.querySelector('[data-coupon-msg]');
           const codeInput = (v.couponCode || '').trim();
           if (codeInput) {
-            const res = C.validateCoupon(codeInput, subtotal, v.date);
+            const res = C.validateCoupon(codeInput, subtotal, v.date, v.phone);
             if (res.ok) { couponDiscount = res.discount; couponCode = res.coupon.code; if (msgEl) { msgEl.textContent = `✓ הנחה ${U.money(res.discount)}`; msgEl.style.color = 'var(--ok)'; } }
             else if (msgEl) { msgEl.textContent = '⚠ ' + res.reason; msgEl.style.color = 'var(--bad)'; }
           } else if (msgEl) { msgEl.textContent = ''; }

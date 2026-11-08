@@ -374,7 +374,7 @@
     const days = s.room || s.fridge || 0, where = s.room ? 'בטמפרטורת החדר' : s.fridge ? 'בקירור' : '';
     const w = root.open('', '_blank'); if (!w) return A.toast('הדפדפן חסם חלון — אפשרי חלונות קופצים');
     w.document.write(`<html dir="rtl" lang="he"><head><meta charset="utf-8"><title>תווית — ${U.esc(r.name)}</title>
-      <style>body{font-family:Assistant,Arial;margin:0;padding:16px;color:#2f1d11}.l{width:90mm;border:1px solid #4a2a16;border-radius:6px;padding:10px 12px}h1{font-family:'Frank Ruhl Libre',serif;font-size:20px;margin:4px 0;color:#4a2a16}p{margin:4px 0;font-size:11.5px;line-height:1.45}.al{font-weight:700}.row{display:flex;justify-content:space-between;font-size:11.5px;margin-top:6px}@media print{body{padding:0}}</style></head><body>
+      <style>body{font-family:Assistant,Arial;margin:0;padding:16px;color:#2f1d11}.l{width:90mm;border:1px solid #3b2d1e;border-radius:6px;padding:10px 12px}h1{font-family:'Frank Ruhl Libre',serif;font-size:20px;margin:4px 0;color:#3b2d1e}p{margin:4px 0;font-size:11.5px;line-height:1.45}.al{font-weight:700}.row{display:flex;justify-content:space-between;font-size:11.5px;margin-top:6px}@media print{body{padding:0}}</style></head><body>
       <div class="l"><div style="text-align:center"><img src="${new URL('assets/logo.png', location.href)}" style="width:90px"></div>
       <h1>${U.esc(r.name)}</h1>
       <p><b>רכיבים:</b> ${flat.map(f => (f.ing.allergens || []).length ? `<b>${U.esc(f.ing.name)}</b>` : U.esc(f.ing.name)).join(', ')}.</p>

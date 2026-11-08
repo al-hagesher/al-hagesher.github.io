@@ -1,17 +1,18 @@
 /* על הגשר — מערכת עיצוב לפי הלוגו: חום עמוק, נייר שמנת, קווי כבלים דקים */
 :root {
-  --brown: #4a2a16;
-  --brown-2: #6b4126;
-  --brown-3: #8f603f;
-  --caramel: #b8875e;
-  --sand: #efe6db;
-  --sand-2: #f5efe7;
-  --cream: #faf7f2;
-  --paper: #fffdfa;
-  --line: #e8ded2;
-  --line-2: #d9cbbb;
-  --ink: #2f1d11;
-  --muted: #74604f;
+  /* חום שוקולדי קהה — בלי גוון אדום, עמוק ומשוחק */
+  --brown: #3b2d1e;
+  --brown-2: #5a4432;
+  --brown-3: #80624a;
+  --caramel: #a8805a;
+  --sand: #ece3d5;
+  --sand-2: #f3ece2;
+  --cream: #faf6f0;
+  --paper: #fffdf9;
+  --line: #e4d9cc;
+  --line-2: #d2c4b2;
+  --ink: #2a1e13;
+  --muted: #705f4e;
   --ok: #4c7445; --ok-bg: #e9f1e4;
   --warn: #9c6b16; --warn-bg: #f8eedb;
   --bad: #a13d2d; --bad-bg: #f7e4df;
@@ -77,7 +78,7 @@ svg.inl { width: 15px; height: 15px; vertical-align: -2px; }
 #splash {
   /* זהה למסך הפתיחה של הטלפון (assets/splash) — כך המעבר חלק, בלי "לוגו מודבק על דף לבן" */
   position: fixed; inset: 0; z-index: 1000; overflow: hidden;
-  background: radial-gradient(ellipse 75% 60% at 50% 42%, #5a341c 0%, #3f2413 55%, #2e190c 100%);
+  background: radial-gradient(ellipse 75% 60% at 50% 42%, #503c28 0%, #3b2d1e 55%, #26180e 100%);
   transition: opacity .55s ease, visibility .55s; animation: splashFailsafe 0s 5s forwards;
 }
 #splash.done { opacity: 0; visibility: hidden; }
@@ -522,7 +523,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: non
 
 /* ---------- הדפסה ---------- */
 @media print {
-  :root { --brown: #4a2a16; --ink: #2f1d11; --paper: #fff; --cream: #fff; --line: #ddd; --muted: #666; }
+  :root { --brown: #3b2d1e; --ink: #2a1e13; --paper: #fff; --cream: #fff; --line: #ddd; --muted: #666; }
   .sidebar, .topbar, .tabbar, .no-print, #toast, .timers { display: none !important; }
   main { padding: 0; max-width: none; }
   body { background: #fff; }

@@ -52,7 +52,7 @@
     }
     return {
       v: 1, bizName: s.businessName, phone: U.phoneIntl(s.phone), open: !!f.open, closedMsg: f.closedMsg, title: f.title, intro: f.intro,
-      pickupAddress: f.pickupAddress, payInfo: f.payInfo, terms: f.terms, leadDays: +f.leadDays || 0, maxDaysAhead: +f.maxDaysAhead || 30,
+      pickupAddress: f.pickupAddress, payInfo: f.payInfo, terms: f.terms, cancellationPolicy: s.cancellationPolicy || '', leadDays: +f.leadDays || 0, maxDaysAhead: +f.maxDaysAhead || 30,
       capacity: +f.capacity || 0, slotMinutes: +f.slotMinutes || 0, minOrder: +f.minOrder || 0, blocked: f.blocked.filter(d => d >= t),
       pay: { mode: f.pay.mode, pct: +f.pay.pct || 50, bit: f.pay.bit || s.phone || '', paybox: A.safeUrl(f.pay.paybox), hours: +f.pay.hours || 24 },
       days: f.days, delivery: { on: !!f.delivery.on, fee: +f.delivery.fee || 0, freeAbove: +f.delivery.freeAbove || 0, note: f.delivery.note || '' },

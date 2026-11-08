@@ -29,6 +29,10 @@
             <label class="field"><span>סוג עוסק</span><select name="vatMode">${A.opts([['exempt', 'עוסק פטור (בלי מע״מ)'], ['licensed', 'עוסק מורשה (מחירים כוללים מע״מ)']], s.vatMode)}</select></label>
             <label class="field"><span>שיעור מע״מ (%)</span><input type="number" min="0" step="0.1" name="vatRate" value="${U.round(s.vatRate * 100, 1)}"></label>
           </div></div>
+        <div class="card" style="grid-column:span 2"><div class="card-h"><h3>מדיניות ביטולים</h3></div>
+          <p class="small muted" style="margin-top:0">תוצג בטופס ההזמנה ללקוחות, ותהיה זמינה לשליחה בוואטסאפ</p>
+          <textarea name="cancellationPolicy" data-form="biz" rows="10" style="width:100%;font-family:inherit;padding:10px 12px;border:1px solid var(--line);border-radius:10px;resize:vertical">${U.esc(s.cancellationPolicy || '')}</textarea>
+        </div>
         <div class="card"><div class="card-h"><h3>${A.icon('download')}גיבוי ושחזור</h3></div>
           <p style="margin-top:0">${A.sync && A.sync.enabled() ? 'הסנכרון שומר עותק מעודכן בענן. בנוסף, מומלץ להוריד גיבוי לקובץ פעם בחודש.' : 'כל הנתונים נשמרים בדפדפן במכשיר הזה. מחיקת נתוני גלישה או החלפת מכשיר — ימחקו אותם. <b>גבי פעם בשבוע</b> או הפעילי סנכרון.'}</p>
           <p class="small" style="margin:0 0 6px">${A.storage.persisted === true ? '✓ האחסון במכשיר מוגן מפני מחיקה אוטומטית של הדפדפן.' : A.storage.persisted === false ? '⚠️ הדפדפן לא אישר אחסון מוגן. התקנת האפליקציה על המסך הראשי והפעלת סנכרון שומרות על הנתונים.' : ''}</p>

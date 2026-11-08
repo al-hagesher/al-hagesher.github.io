@@ -61,6 +61,12 @@
     .note { font-size: .88rem; color: var(--muted); }
     .check { display: flex; gap: 10px; align-items: flex-start; font-size: .92rem; }
     .check input { width: 20px; height: 20px; flex: none; margin-top: 2px; accent-color: var(--brown); }
+    .policy-box { background: var(--sand-2); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin: 14px 0; }
+    .policy-box summary { cursor: pointer; font-weight: 600; color: var(--brown); user-select: none; padding: 2px 0; }
+    .policy-box summary::-webkit-details-marker { display: none; }
+    .policy-box summary::before { content: '◀'; display: inline-block; margin-left: 8px; font-size: .75em; transition: transform .2s; }
+    .policy-box[open] summary::before { transform: rotate(-90deg); }
+    .policy-text { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line); white-space: pre-wrap; font-size: .88rem; color: var(--muted); line-height: 1.6; }
     .bar { position: fixed; bottom: 0; left: 0; right: 0; background: rgba(255,253,250,.97); backdrop-filter: blur(8px); border-top: 1px solid var(--line); padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); z-index: 10; }
     .bar .in { max-width: 680px; margin: 0 auto; display: flex; align-items: center; gap: 12px; }
     .total { flex: 1; } .total b { font-family: Bellefair, 'Frank Ruhl Libre', serif; font-size: 1.5rem; color: var(--brown); display: block; line-height: 1.1; } .total span { font-size: .8rem; color: var(--muted); }

@@ -520,11 +520,11 @@ ${JSON.stringify(stateSnapshot(), null, 2)}
     A.setActions(`<button class="btn ghost sm" data-act="clear">${A.icon('trash')}שיחה חדשה</button>`);
     main.innerHTML = `
       <div class="assistant-wrap">
-        <div class="card section" style="padding:12px 16px;display:flex;gap:12px;align-items:center">
-          <div style="width:40px;height:40px;border-radius:50%;background:var(--brown);color:var(--cream);display:flex;align-items:center;justify-content:center;font-size:1.3rem">🤖</div>
+        <div class="card section" style="padding:14px 18px;display:flex;gap:14px;align-items:center">
+          <div style="width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,var(--brown),var(--brown-3));color:var(--cream);display:flex;align-items:center;justify-content:center;font-size:1.4rem;flex-shrink:0">✦</div>
           <div>
-            <h3 style="margin:0">העוזרת של הדסה</h3>
-            <p class="small muted" style="margin:0">Claude Opus · קריאה חופשית · פעולות הרסניות דורשות אישור</p>
+            <h2 class="display" style="margin:0;font-size:1.65rem;color:var(--brown)">העוזרת של הדסה</h2>
+            <p class="small muted" style="margin:2px 0 0;letter-spacing:.01em">Claude Opus · קריאה חופשית · פעולות הרסניות דורשות אישור</p>
           </div>
         </div>
         <div id="chat" class="chat-box">${persistent.length ? persistent.map(renderMsg).join('') : `<div class="chat-empty"><p class="muted">הי! אני יכולה לעזור לך עם ניתוח הזמנות, תמחור, עדכון סטטוס, יצירת קופונים ועוד.</p><div class="chat-suggestions">${suggestions().map(s => `<button class="btn ghost sm" data-suggest="${U.esc(s)}">${U.esc(s)}</button>`).join('')}</div></div>`}</div>

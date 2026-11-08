@@ -49,7 +49,7 @@
       const weekCount = todayO.length + tmrO.length + weekO.length;
       const line = weekCount ? `${weekCount === 1 ? 'הזמנה אחת' : weekCount + ' הזמנות'} פתוחות השבוע · ${U.money(weekRev, 0)} צפוי` : 'השבוע עוד פנוי — זמן טוב ליצירה, לצילום ולמנוחה 🤎';
       main.innerHTML = `
-      <div class="card hero cables section"><img class="hero-logo" src="assets/logo-brown.png" alt="על הגשר"><div><div class="hero-date">${dateTxt}</div><h2>${U.esc(greet)}</h2><p>${line}</p></div></div>
+      <div class="card hero cables section"><img class="hero-logo" src="assets/logo-brown.png" alt="על הגשר"><div><div class="hero-date">${dateTxt}</div><h2 class="display" style="font-size:1.95rem">${U.esc(greet)}</h2><p>${line}</p></div></div>
       ${first ? `<div class="card welcome section cables">
         <h2 style="margin-bottom:8px">ברוכה הבאה למערכת של על הגשר 🤎</h2>
         <p style="margin:0 0 14px;opacity:.9">כבר מחכים לך ${A.state.recipes.filter(r => r.library).length} מתכוני בסיס מדויקים בגרמים, מחסן עם ${A.state.ingredients.length} מצרכים ומחירים משוערים, ותמחור אוטומטי לכל מתכון. שלושה צעדים לפתיחה:</p>
@@ -80,10 +80,10 @@
               <a class="btn soft" href="#/wheel">${A.icon('wheel')}גלגל החיים</a>
             </div></div>
           <a class="card cables" href="#/assistant" style="text-decoration:none;color:inherit;display:block">
-            <div class="row" style="gap:12px;align-items:center">
-              <div style="width:44px;height:44px;border-radius:50%;background:var(--brown);color:var(--cream);display:flex;align-items:center;justify-content:center;font-size:1.4rem;flex-shrink:0">🤖</div>
+            <div class="row" style="gap:14px;align-items:center">
+              <div style="width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,var(--brown),var(--brown-3));color:var(--cream);display:flex;align-items:center;justify-content:center;font-size:1.5rem;flex-shrink:0">✦</div>
               <div>
-                <h3 style="margin:0">שאלי את העוזרת שלך</h3>
+                <h3 class="display" style="margin:0;font-size:1.35rem">שאלי את העוזרת שלך</h3>
                 <p class="small muted" style="margin:2px 0 0">"מה הכי רווחי?" · "מה חסר במחסן?" · "תיצרי קופון…"</p>
               </div>
             </div>

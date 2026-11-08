@@ -141,7 +141,18 @@
       businessName: 'על הגשר', ownerName: '', phone: '', address: '',
       hourlyRate: 50, ovenCostPerHour: 4, targetMargin: 0.3,
       vatMode: 'exempt', vatRate: 0.18, nextOrderNum: 1001,
-      defaultDeliveryFee: 20, monthlyGoal: 0, monthlyHours: 60, includeFixed: true, lastBackup: null, orderFormUrl: ''
+      defaultDeliveryFee: 20, monthlyGoal: 0, monthlyHours: 60, includeFixed: true, lastBackup: null, orderFormUrl: '',
+      cancellationPolicy: `מדיניות ביטולים — על הגשר
+
+• ביטול או שינוי הזמנה — עד 48 שעות לפני מועד האיסוף: ללא עלות. יש לכתוב להדסה בפרטי ולקבל החזר כספי מלא.
+• לאחר 48 שעות ממועד האיסוף — לא ניתן לבטל ולקבל החזר כספי.
+• אם לא ניתן להגיע במועד האיסוף — ניתן לשלוח מישהו אחר לאסוף בשמכם. יש להודיע מראש.
+• איסוף לא בזמן — הסופגניות נשמרות עד סוף יום האיסוף בלבד, ולא יישמרו ליום אחר. ניתן להגיע לאחר שעות האיסוף בתיאום מראש בלבד.
+  לקוח/ה שלא לקחה את הזמנתה במועד — לא תקבל החזר כספי/פיצוי.
+• בעיה במוצר / מוצר פגום — נא לדווח באותו יום עם תמונה, והלקוח/ה יקבל החזר כספי/פיצוי במידת הצורך.
+
+תודה על ההבנה!
+על הגשר — מאפים | מתוקים | ומעבר`
     },
     ingredients: [], recipes: [], orders: [], expenses: [], recurring: [], coupons: [],
     customers: {}, // הערות ופרטים נוספים לפי מפתח טלפון

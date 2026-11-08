@@ -98,6 +98,7 @@
         <label><span>אלרגיות / רגישויות</span><input id="f_al" placeholder="למשל: ללא אגוזים"></label>
         <label><span>הערות (הקדשה, צבעים, בקשות)</span><textarea id="f_no" rows="3"></textarea></label>
         ${payRule() ? `<div class="paybox-note">💳 ${payRule()}</div>` : cfg.payInfo ? `<p class="note">💳 ${esc(cfg.payInfo)}</p>` : ''}
+        ${cfg.cancellationPolicy ? `<details class="policy-box"><summary>📋 מדיניות ביטולים — חשוב לקרוא</summary><div class="policy-text">${esc(cfg.cancellationPolicy)}</div></details>` : ''}
         ${cfg.terms ? `<label class="check"><input type="checkbox" id="f_terms"><span>${esc(cfg.terms)}</span></label>` : ''}
         <div id="err"></div>
         <footer>${esc(cfg.bizName || 'על הגשר')} · ההזמנה תאושר סופית לאחר אישור בעלת העסק</footer>`;

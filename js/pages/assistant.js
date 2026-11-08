@@ -209,6 +209,121 @@ ${JSON.stringify(stateSnapshot(), null, 2)}
       }
     },
 
+    create_recipe: {
+      description: 'יצירת מתכון חדש. אפשר להעביר חלקיים — שדות שלא נמסרו יהיו ריקים ואפשר להשלים אחר כך. מצרכים שלא קיימים במחסן ייווצרו אוטומטית עם מחיר 0 (יש לסמן אותם estimated=true).',
+      input_schema: { type: 'object', required: ['name', 'yield', 'ingredients'], properties: {
+        name: { type: 'string', description: 'שם המתכון' },
+        category: { type: 'string', description: 'עוגות / עוגיות / חלות ולחמים / קינוחים / מאפים מלוחים / בסיסים וקרמים' },
+        yield: { type: 'number', description: 'כמות יחידות שיוצאות ממנה אחת' },
+        yield_unit: { type: 'string', description: 'שם היחידה: עוגה / קופסה / חלה / יח׳' },
+        price: { type: 'number', description: 'מחיר מכירה ליחידה (אופציונלי)' },
+        oven_temp: { type: 'number', description: 'טמפרטורת תנור במעלות' },
+        times: { type: 'object', description: 'זמנים בדקות', properties: {
+          prep: { type: 'number', description: 'הכנה — עבודה פעילה' },
+          rest: { type: 'number', description: 'התפחה / מנוחה' },
+          bake: { type: 'number', description: 'אפייה' },
+          cool: { type: 'number', description: 'צינון' },
+          decor: { type: 'number', description: 'עיצוב ואריזה' }
+        } },
+        ingredients: { type: 'array', description: 'רשימת מצרכים', items: { type: 'object', required: ['name', 'qty', 'unit'], properties: {
+          name: { type: 'string' }, qty: { type: 'number' },
+          unit: { type: 'string', enum: ['g', 'kg', 'ml', 'l', 'unit', 'cup', 'tbsp', 'tsp'], description: 'g=גרם, kg=ק״ג, ml=מ״ל, l=ליטר, unit=יחידה, cup=כוס, tbsp=כף, tsp=כפית' },
+          section: { type: 'string', description: 'קבוצה (למשל: בצק / מילוי / ציפוי)' }
+        } } },
+        steps: { type: 'array', items: { type: 'string' }, description: 'שלבי הכנה בסדר' },
+        notes: { type: 'string', description: 'הערות וטיפים' },
+        description: { type: 'string', description: 'תיאור קצר' },
+        tags: { type: 'array', items: { type: 'string' } },
+        storage: { type: 'object', properties: {
+          room: { type: 'number', description: 'ימים בטמפ׳ חדר' },
+          fridge: { type: 'number', description: 'ימים במקרר' },
+          freezer: { type: 'number', description: 'ימים במקפיא' },
+          note: { type: 'string', description: 'הוראות אחסון' }
+        } }
+      } },
+      execute(args) {
+        if (A.state.recipes.find(x => x.name === args.name)) return JSON.stringify({ error: 'כבר קיים מתכון בשם "' + args.name + '"' });
+        const createdIngredients = [];
+        const ingredients = (args.ingredients || []).map(line => {
+          let ing = A.state.ingredients.find(i => i.name === line.name);
+          if (!ing) {
+            ing = { id: U.uid(), name: line.name, category: 'אחר', pkgPrice: 0, pkgSize: 1, pkgUnit: ['g','kg','ml','l'].includes(line.unit) ? (line.unit === 'g' ? 'kg' : line.unit === 'ml' ? 'l' : line.unit) : 'unit', gramsPerCup: 240, gramsPerUnit: 0, allergens: [], stock: 0, minStock: 0, supplier: '', estimated: true };
+            A.state.ingredients.push(ing);
+            createdIngredients.push(line.name);
+          }
+          return { ingId: ing.id, qty: +line.qty || 0, unit: line.unit, section: line.section || '' };
+        });
+        const t = args.times || {};
+        const recipe = {
+          id: U.uid(),
+          name: args.name,
+          category: args.category || 'עוגות',
+          yield: +args.yield || 1,
+          yieldUnit: args.yield_unit || 'יח׳',
+          price: +args.price || 0,
+          packagingPerUnit: 0, otherCost: 0,
+          ovenTemp: args.oven_temp || '',
+          times: { prep: +t.prep || 0, rest: +t.rest || 0, bake: +t.bake || 0, cool: +t.cool || 0, decor: +t.decor || 0 },
+          ingredients,
+          steps: (args.steps || []).map(s => ({ text: s, history: [] })),
+          notes: args.notes || '',
+          description: args.description || '',
+          tags: args.tags || [],
+          storage: args.storage || { room: 0, fridge: 0, freezer: 0, note: '' },
+          favorite: false,
+          created: U.today(),
+          image: ''
+        };
+        A.state.recipes.push(recipe);
+        saveState('מתכון נוסף');
+        const pricing = C.pricing(recipe);
+        return JSON.stringify({ ok: true, id: recipe.id, name: recipe.name, cost_per_unit: pricing.perUnit, suggested_price: pricing.suggested, new_ingredients_created: createdIngredients });
+      }
+    },
+
+    update_recipe: {
+      approval: 'confirm',
+      description: 'עדכון מתכון קיים — שם, זמנים, מחיר, מצרכים, שלבים, הערות ועוד. שולחים רק את השדות שרוצים לשנות.',
+      input_schema: { type: 'object', required: ['recipe_id_or_name'], properties: {
+        recipe_id_or_name: { type: 'string', description: 'ID של מתכון או שם מדויק' },
+        name: { type: 'string' }, category: { type: 'string' }, yield: { type: 'number' }, yield_unit: { type: 'string' },
+        price: { type: 'number' }, oven_temp: { type: 'number' },
+        times: { type: 'object', properties: { prep: { type: 'number' }, rest: { type: 'number' }, bake: { type: 'number' }, cool: { type: 'number' }, decor: { type: 'number' } } },
+        add_ingredients: { type: 'array', description: 'מצרכים להוסיף', items: { type: 'object', properties: { name: { type: 'string' }, qty: { type: 'number' }, unit: { type: 'string' }, section: { type: 'string' } } } },
+        replace_ingredients: { type: 'array', description: 'החלפה מלאה של רשימת המצרכים', items: { type: 'object' } },
+        add_steps: { type: 'array', items: { type: 'string' }, description: 'שלבים להוסיף בסוף' },
+        replace_steps: { type: 'array', items: { type: 'string' }, description: 'החלפת כל רשימת השלבים' },
+        notes: { type: 'string' },
+        description: { type: 'string' }
+      } },
+      execute(args) {
+        const q = args.recipe_id_or_name;
+        let r = A.state.recipes.find(x => x.id === q) || A.state.recipes.find(x => x.name === q);
+        if (!r) { const m = A.state.recipes.filter(x => (x.name || '').includes(q)); if (m.length !== 1) return JSON.stringify({ error: m.length ? 'שם דו-משמעי' : 'מתכון לא נמצא', matches: m.map(x => ({ id: x.id, name: x.name })) }); r = m[0]; }
+        const changes = {};
+        if (args.name) { changes.name = { from: r.name, to: args.name }; r.name = args.name; }
+        if (args.category) { r.category = args.category; changes.category = args.category; }
+        if (args.yield) { r.yield = +args.yield; changes.yield = +args.yield; }
+        if (args.yield_unit) { r.yieldUnit = args.yield_unit; changes.yieldUnit = args.yield_unit; }
+        if (args.price != null) { changes.price = { from: r.price, to: +args.price }; r.price = +args.price; }
+        if (args.oven_temp) { r.ovenTemp = +args.oven_temp; changes.ovenTemp = +args.oven_temp; }
+        if (args.times) { Object.assign(r.times = r.times || {}, args.times); changes.times = args.times; }
+        if (args.notes != null) { r.notes = args.notes; changes.notes = true; }
+        if (args.description != null) { r.description = args.description; changes.description = true; }
+        const mapIngLine = line => {
+          let ing = A.state.ingredients.find(i => i.name === line.name);
+          if (!ing) { ing = { id: U.uid(), name: line.name, category: 'אחר', pkgPrice: 0, pkgSize: 1, pkgUnit: 'kg', gramsPerCup: 240, gramsPerUnit: 0, allergens: [], stock: 0, minStock: 0, supplier: '', estimated: true }; A.state.ingredients.push(ing); }
+          return { ingId: ing.id, qty: +line.qty || 0, unit: line.unit || 'g', section: line.section || '' };
+        };
+        if (args.replace_ingredients) { r.ingredients = args.replace_ingredients.map(mapIngLine); changes.ingredients = 'replaced'; }
+        else if (args.add_ingredients) { r.ingredients = (r.ingredients || []).concat(args.add_ingredients.map(mapIngLine)); changes.ingredients = 'added ' + args.add_ingredients.length; }
+        if (args.replace_steps) { r.steps = args.replace_steps.map(s => ({ text: s, history: [] })); changes.steps = 'replaced'; }
+        else if (args.add_steps) { r.steps = (r.steps || []).concat(args.add_steps.map(s => ({ text: s, history: [] }))); changes.steps = 'added ' + args.add_steps.length; }
+        saveState('מתכון עודכן');
+        return JSON.stringify({ ok: true, recipe: r.name, changes });
+      }
+    },
+
     create_coupon: {
       description: 'יצירת קופון חדש.',
       input_schema: { type: 'object', required: ['code', 'type', 'value'], properties: {
@@ -280,7 +395,8 @@ ${JSON.stringify(stateSnapshot(), null, 2)}
     const descs = {
       delete_order: `למחוק הזמנה #${input.order_id} לצמיתות? לא ניתן לשחזר.`,
       delete_coupon: `למחוק את הקופון "${input.code}" לצמיתות?`,
-      change_recipe_price: `לשנות את המחיר של "${input.recipe_name}" ל-${U.money(+input.new_price)}?`
+      change_recipe_price: `לשנות את המחיר של "${input.recipe_id_or_name || input.recipe_name}" ל-${U.money(+input.new_price)}?`,
+      update_recipe: `לעדכן את המתכון "${input.recipe_id_or_name}"${input.name ? ` → שם: ${input.name}` : ''}${input.price != null ? ` → מחיר: ${U.money(+input.price)}` : ''}${input.add_steps ? ` → ${input.add_steps.length} שלבים חדשים` : ''}${input.add_ingredients ? ` → ${input.add_ingredients.length} מצרכים חדשים` : ''}?`
     };
     return descs[name] || `לבצע ${name}?`;
   }

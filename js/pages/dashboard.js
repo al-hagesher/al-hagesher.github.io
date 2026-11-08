@@ -51,9 +51,9 @@
       main.innerHTML = `
       <div class="card hero cables section"><img class="hero-logo" src="assets/logo-brown.png" alt="על הגשר"><div><div class="hero-date">${dateTxt}</div><h2 class="display" style="font-size:1.95rem">${U.esc(greet)}</h2><p>${line}</p></div></div>
       ${first ? `<div class="card welcome section cables">
-        <h2 style="margin-bottom:8px">ברוכה הבאה למערכת של על הגשר 🤎</h2>
-        <p style="margin:0 0 14px;opacity:.9">כבר מחכים לך ${A.state.recipes.filter(r => r.library).length} מתכוני בסיס מדויקים בגרמים, מחסן עם ${A.state.ingredients.length} מצרכים ומחירים משוערים, ותמחור אוטומטי לכל מתכון. שלושה צעדים לפתיחה:</p>
-        <ol style="margin:0 0 14px;padding-inline-start:20px;line-height:1.9;opacity:.95"><li>בהגדרות: השכר השעתי שלך ויעד הרווח</li><li>במחסן: עדכון מחירי המצרכים לפי הקבלות</li><li>בטופס ההזמנות: יצירת קישור קבוע ללקוחות</li></ol>
+        <h2 class="display" style="margin-bottom:10px;font-size:1.9rem;letter-spacing:.015em">ברוכה הבאה למערכת של על הגשר <span style="font-size:.85em">🤎</span></h2>
+        <p style="margin:0 0 14px;opacity:.92;font-size:1.02rem;line-height:1.6">כבר מחכים לך ${A.state.recipes.filter(r => r.library).length} מתכוני בסיס מדויקים בגרמים, מחסן עם ${A.state.ingredients.length} מצרכים ומחירים משוערים, ותמחור אוטומטי לכל מתכון. שלושה צעדים לפתיחה:</p>
+        <ol style="margin:0 0 16px;padding-inline-start:22px;line-height:1.9;opacity:.95"><li>בהגדרות: השכר השעתי שלך ויעד הרווח</li><li>במחסן: עדכון מחירי המצרכים לפי הקבלות</li><li>בטופס ההזמנות: יצירת קישור קבוע ללקוחות</li></ol>
         <div class="row"><a class="btn soft" href="#/settings">להתחיל בהגדרות</a><a class="btn ghost" href="#/recipes">למתכונים</a><button class="btn ghost" data-act="dismiss">${A.icon('x')}הבנתי</button></div></div>` : ''}
       <div class="grid g4 section">
         <div class="card kpi"><div class="lbl">${A.icon('orders')}להיום</div><div class="val">${todayO.length}</div><div class="sub">${tmrO.length} מחר · ${weekO.length} בהמשך השבוע</div></div>

@@ -1,7 +1,7 @@
 /* על הגשר — סטודיו סרטונים: מעלים קליפים, בוחרים אורך וסגנון, והאפליקציה עורכת רילס מוכן לאינסטגרם */
 (function (root) {
   const A = root.App, U = A.util, P = A.pages = A.pages || {};
-  const st = { clips: [], target: 30, style: 'calm', format: '9:16', hq: false, title: '', cta: 'להזמנות — הקישור בפרופיל 🤎', music: 'auto', keepOriginal: null, customMusic: null, result: null, rendering: false };
+  const st = { clips: [], target: 30, style: 'calm', format: '9:16', hq: false, title: '', description: '', cta: 'להזמנות — הקישור בפרופיל 🤎', music: 'auto', keepOriginal: null, customMusic: null, result: null, rendering: false };
   let previewAudio = null, signal = null;
 
   const musicFor = () => {
@@ -36,7 +36,7 @@
         main.innerHTML = `<div class="card empty"><h3>הדפדפן הזה לא תומך בעריכת וידאו</h3><p>פתחי את האפליקציה בכרום (מחשב/אנדרואיד) או בספארי מעודכן באייפון.</p></div>`; return;
       }
       const total = U.sum(st.clips, c => c.duration), S = A.VIDEO_STYLES[st.style], mu = musicFor();
-      const plan = st.clips.length ? A.planEdit(st.clips, { target: st.target, style: st.style, bpm: mu && mu.bpm }) : null;
+      const plan = st.clips.length ? A.planEdit(st.clips, { target: st.target, style: st.style, bpm: mu && mu.bpm, description: st.description }) : null;
       main.innerHTML = `
       ${st.result ? resultCard() : ''}
       <div class="grid g2 section" style="align-items:start">
@@ -81,7 +81,8 @@
           </div>
           <div class="card"><div class="card-h"><h3>3. טקסטים ומוזיקה</h3></div>
             <div class="form-grid">
-              <label class="field full"><span>כותרת פתיחה (הוק)</span><input data-f="title" value="${U.esc(st.title)}" placeholder="למשל: הבבקה הכי שוקולדית שתאכלי"></label>
+              <label class="field full"><span>תיאור הסרטון — לפיו העורך בוחר מה להדגיש</span><textarea data-f="description" rows="2" placeholder="למשל: רילס לבאבקה שוקולד. רוצה שהצופה ירגיש את הטקסטורה המושלמת של הבצק המוכן ואת הנזילה של השוקולד — הדגש על קלוז-אפים.">${U.esc(st.description)}</textarea><small>מכוון את העורך — איזה קליפים להעדיף, איזה כיתובים לכתוב, ומה לשים בהוק</small></label>
+              <label class="field full"><span>כותרת פתיחה (הוק) — אופציונלי</span><input data-f="title" value="${U.esc(st.title)}" placeholder="אם ריק — נגזרת מהתיאור"></label>
               <label class="field full"><span>טקסט בסיום</span><input data-f="cta" value="${U.esc(st.cta)}"></label>
               <label class="field"><span>מוזיקה</span><select data-f="music">${A.opts([['auto', `אוטומטית לפי הסגנון${mu && st.music === 'auto' ? ` (${mu.title})` : ''}`], ...A.MUSIC.map(m => [m.id, `${m.title} · ${m.mood}`]), ['custom', 'קובץ שלי…'], ['none', 'בלי מוזיקה']], st.music)}</select></label>
               <div class="field"><span>&nbsp;</span><div class="row">${mu ? `<button class="btn sm ghost" data-act="preview">${A.icon(previewAudio && !previewAudio.paused ? 'x' : 'play')}${previewAudio && !previewAudio.paused ? 'עצירה' : 'האזנה'}</button>` : ''}
@@ -93,7 +94,7 @@
             <p class="small muted" style="margin:8px 0 0">כל המוזיקה כאן חופשית לשימוש מסחרי (CC0). אפשר גם לייצא בלי מוזיקה ולהוסיף צליל טרנדי באינסטגרם.</p>
           </div>
           <div class="card">
-            ${plan && plan.segments.length ? `<p class="small" style="margin:0 0 10px">${plan.segments.length} חיתוכים · ${fmtDur(plan.total)} · ${S.name}${mu ? ' · ' + U.esc(mu.title) : ''}${total < st.target * 0.6 ? ` <span class="badge warn">מעט חומר מצולם — חלק מהקטעים יואטו</span>` : ''}</p>` : ''}
+            ${plan && plan.segments.length ? `<p class="small" style="margin:0 0 10px">${plan.segments.length} חיתוכים · ${fmtDur(plan.total)} · ${S.name}${mu ? ' · ' + U.esc(mu.title) : ''}${total < st.target * 0.6 ? ` <span class="badge warn">מעט חומר מצולם — חלק מהקטעים יואטו</span>` : ''}</p>${plan.hookText || Object.values(plan.hints || {}).some(Boolean) ? `<p class="small muted" style="margin:0 0 10px">העורך קלט מהתיאור:${plan.hookText ? ` הוק → "${U.esc(plan.hookText)}"` : ''}${plan.hints?.product ? ' · חשיפה ארוכה' : ''}${plan.hints?.quick ? ' · קצב מהיר' : ''}${plan.hints?.closeup ? ' · דגש על קלוז-אפ' : ''}${plan.hints?.action ? ' · דגש על תהליך' : ''}${plan.hints?.asmr ? ' · שמור צליל מקורי' : ''}</p>` : ''}` : ''}
             <button class="btn" style="width:100%;min-height:52px;font-size:1.05rem" data-act="render" ${st.clips.length ? '' : 'disabled'}>${A.icon('play')}עריכת הסרטון</button>
             ${!st.clips.length ? '<p class="small muted" style="margin:8px 0 0;text-align:center">הוסיפי קליפים כדי להתחיל</p>' : ''}
           </div>
@@ -175,7 +176,7 @@
     // חייבים ליצור ולהפעיל את האודיו ברגע הלחיצה — אחרת באייפון הסרטון יוצא שקט
     let audioContext = null; try { audioContext = new (root.AudioContext || root.webkitAudioContext)(); audioContext.resume(); } catch (e) { }
     const mu = musicFor(), S = A.VIDEO_STYLES[st.style];
-    const plan = A.planEdit(st.clips, { target: st.target, style: st.style, bpm: mu && mu.bpm });
+    const plan = A.planEdit(st.clips, { target: st.target, style: st.style, bpm: mu && mu.bpm, description: st.description });
     signal = { cancelled: false };
     A.modal({
       title: 'עורכת את הסרטון…', size: 'narrow',
@@ -189,7 +190,7 @@
     const canvas = document.getElementById('vcanvas'); st.rendering = true;
     try {
       const out = await A.renderVideo(canvas, st.clips, plan, {
-        format: st.format, hq: st.hq, title: st.title, cta: st.cta, sub: A.state.settings.businessName || 'על הגשר',
+        format: st.format, hq: st.hq, title: st.title || plan.hookText || '', cta: st.cta, sub: A.state.settings.businessName || 'על הגשר',
         audioContext, musicUrl: mu && mu.url, musicVol: keepOrig() ? Math.min(S.musicVol, 0.45) : S.musicVol, keepOriginal: keepOrig()
       }, p => { const pr = document.getElementById('vprog'), tx = document.getElementById('vtxt'); if (pr) pr.style.width = (p * 100) + '%'; if (tx) tx.textContent = `${Math.round(p * 100)}%`; }, signal);
       st.rendering = false;

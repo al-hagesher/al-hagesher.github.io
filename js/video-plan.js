@@ -40,6 +40,15 @@
     const S = STYLES[opts.style] || STYLES.calm;
     const target = clamp(+opts.target || 30, 5, 180);
     const beat = opts.bpm ? 60 / opts.bpm : null;
+    // ניתוח מילות מפתח מהתיאור — משפיע על דגשים בעריכה
+    const desc = (opts.description || '').toLowerCase();
+    const focusHints = {
+      closeup: /קלוז|תקריב|close/.test(desc),              // להעדיף קליפים סטטיים לתקריבים
+      action: /תהליך|הכנ|שלבים|פעולה|חיתוך|יציקה|ערבוב|אפי|נמס/.test(desc), // להעדיף קליפי פעולה
+      product: /מוצר מוגמר|תוצאה|מראה סופי|חשיפה/.test(desc),              // חשיפה ארוכה יותר
+      quick: /קצר|מהיר|טרנד/.test(desc),                                   // חיתוכים קצרים יותר
+      asmr: /asmr|שקט|נזילה|קראנץ|צליל/.test(desc)                        // שמור צליל מקורי
+    };
     const q = (sec, beats) => beat ? Math.max(beat, Math.round(sec / beat) * beat) : sec; // יישור לביט
     const valid = clips.map((c, i) => ({ ...c, i })).filter(c => c.duration > 0.3);
     if (!valid.length) return { segments: [], endCard: 0, total: 0, style: opts.style };
@@ -57,6 +66,9 @@
     const endCard = opts.endCard === false ? 0 : (target >= 12 ? 2 : 1.2);
     let hook = opts.hook === false || valid.length < 2 ? 0 : q(S.hook, 2);
     let reveal = q(S.reveal, 4);
+    // התיאור מכתיב דגשים: "חשיפה" מאריך את הסוף, "קצר" מקצר חיתוכים, וכו׳
+    if (focusHints.product) reveal = reveal * 1.3;
+    if (focusHints.quick) reveal = reveal * 0.75;
     // סרטון קצר מאוד: מקצרים הוק וחשיפה כדי שישאר מקום לתהליך
     const minBody = Math.min(valid.length - (valid.length > 1 ? 1 : 0), 3) * 0.9;
     let body = target - endCard - hook - reveal;
@@ -143,7 +155,14 @@
     // עדיין חסר חומר מצולם: את היתרה מקבל מסך הסיום (לוגו וקריאה לפעולה); עודף מקוצר מהחשיפה
     let finalEnd = endCard + Math.max(0, target - endCard - sum());
     if (target - finalEnd - sum() < -0.02) { const last = segs[segs.length - 1]; last.dur = r3(Math.max(0.5, last.dur + (target - finalEnd - sum()))); }
-    return { segments: segs, endCard: r3(finalEnd), total: r3(sum() + finalEnd), style: opts.style, styleDef: S };
+    // הפקת הוק טקסטואלי מהתיאור — משפט פתיחה קצר למי שלא מילא כותרת
+    let hookText = '';
+    if (opts.description) {
+      const firstLine = String(opts.description).split(/[.\n!?]/).map(s => s.trim()).filter(Boolean)[0] || '';
+      const words = firstLine.split(/\s+/);
+      hookText = words.length <= 7 ? firstLine : words.slice(0, 7).join(' ') + '…';
+    }
+    return { segments: segs, endCard: r3(finalEnd), total: r3(sum() + finalEnd), style: opts.style, styleDef: S, hookText, hints: focusHints };
   }
 
   A.VIDEO_STYLES = STYLES;

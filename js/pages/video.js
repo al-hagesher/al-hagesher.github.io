@@ -44,14 +44,22 @@
           <div class="card"><div class="card-h"><h3>${A.icon('play')}1. הקליפים שלך</h3><span class="small muted">${st.clips.length ? `${st.clips.length} קליפים · ${fmtDur(total)}` : ''}</span></div>
             <label class="btn" style="width:100%">${A.icon('upload')}הוספת קליפים מהגלריה / צילום<input type="file" accept="video/*" multiple data-files hidden></label>
             <p class="small muted" style="margin:8px 0 0">סדר הקליפים = סדר הסיפור. סמני ⭐ על הקליף של המוצר המוגמר — ממנו נפתח ונסיים.</p>
-            <div id="clipList" style="margin-top:10px">${st.clips.map((c, k) => `<div class="list-item" data-k="${k}">
-              <div style="width:54px;height:72px;border-radius:8px;overflow:hidden;background:var(--sand);flex:none">${c.thumb ? `<img src="${c.thumb}" alt="" style="width:100%;height:100%;object-fit:cover">` : ''}</div>
+            ${st.analyzing ? `<div class="small muted" style="margin:8px 0;padding:8px 10px;background:var(--sand-2);border-radius:8px" data-analyzer>מנתחת קליפים — מודדת בהירות, חדות ותנועה כדי לבחור את הרגעים הכי טובים</div>` : ''}
+            <div id="clipList" style="margin-top:10px">${st.clips.map((c, k) => {
+              const an = c.analysis;
+              const tags = an ? [
+                an.tags.dark && 'חשוך', an.tags.blurry && 'לא חד', an.tags.static && 'סטטי · מתאים לחשיפה', an.tags.action && 'תנועה · מתאים לבודי'
+              ].filter(Boolean) : [];
+              return `<div class="list-item" data-k="${k}">
+              <div style="width:54px;height:72px;border-radius:8px;overflow:hidden;background:var(--sand);flex:none;position:relative">${c.thumb ? `<img src="${c.thumb}" alt="" style="width:100%;height:100%;object-fit:cover">` : ''}${an ? `<span style="position:absolute;bottom:2px;left:2px;background:rgba(0,0,0,.6);color:#fff;font-size:.65rem;padding:1px 4px;border-radius:4px">${Math.round(an.avgQuality * 100)}</span>` : ''}</div>
               <div class="main"><div class="t">${k + 1}. ${fmtDur(c.duration)} ${c.hero ? '<span class="badge brown">⭐ מוצר מוגמר</span>' : ''}</div>
+                ${tags.length ? `<div class="small muted" style="margin-top:2px">${tags.map(t => `<span class="chip" style="font-size:.72rem;padding:1px 6px;margin:0 2px">${t}</span>`).join('')}</div>` : ''}
                 <input data-cap="${k}" value="${U.esc(c.caption)}" placeholder="${st.style === 'recipe' ? `כיתוב לשלב (ברירת מחדל: שלב ${k + 1})` : 'כיתוב (לא חובה)'}" style="min-height:34px;padding:5px 9px;margin-top:4px"></div>
               <div class="row" style="gap:2px;flex-direction:column">
                 <button class="icon-btn" data-hero="${k}" aria-label="סימון כמוצר מוגמר">${A.icon('star')}</button>
                 <div class="row" style="gap:0"><button class="icon-btn" data-up="${k}" aria-label="להעלות" ${k ? '' : 'disabled'}>${A.icon('right')}</button><button class="icon-btn" data-down="${k}" aria-label="להוריד" ${k < st.clips.length - 1 ? '' : 'disabled'}>${A.icon('left')}</button></div>
-                <button class="icon-btn" data-del="${k}" aria-label="הסרה">${A.icon('trash')}</button></div></div>`).join('')}</div>
+                <button class="icon-btn" data-del="${k}" aria-label="הסרה">${A.icon('trash')}</button></div></div>`;
+            }).join('')}</div>
           </div>
           <div class="card"><div class="card-h"><h3>${A.icon('star')}טיפים לצילום שעובד</h3></div>
             <ul class="install-steps small" style="line-height:1.9">
@@ -98,7 +106,24 @@
           A.toast('טוענת קליפים…');
           const added = (await Promise.all([...f.files].map(probe))).filter(Boolean);
           st.clips.push(...added); if (!st.clips.some(c => c.hero) && st.clips.length) st.clips[st.clips.length - 1].hero = true;
-          A.refresh(); return;
+          A.refresh();
+          // ניתוח ברקע — מודד בהירות/תנועה/חדות של כל קליף כדי שהעריכה תדע מה לקחת ומה לדלג עליו
+          if (A.analyzeClips) {
+            st.analyzing = true; A.refresh();
+            try {
+              const analyses = await A.analyzeClips(added, p => { st.analyzeProgress = p; const el = document.querySelector('[data-analyzer]'); if (el) el.textContent = `מנתחת ${Math.round(p * 100)}%`; });
+              added.forEach((c, k) => { if (analyses[k]) c.analysis = analyses[k]; });
+              // סימון hero חכם: אם המשתמשת לא סימנה, בוחר/ת לפי "מוצר מוגמר יציב ובהיר"
+              if (!st.clips.find(c => c.hero) || st.clips.length === added.length) {
+                const scored = st.clips.filter(c => c.analysis).map(c => ({
+                  c, score: (c.analysis.tags?.static ? 0.35 : 0) + c.analysis.avgQuality * 0.4 + Math.min(1, c.analysis.avgBrightness * 1.5) * 0.25
+                })).sort((a, b) => b.score - a.score);
+                if (scored[0]) { st.clips.forEach(c => c.hero = false); scored[0].c.hero = true; }
+              }
+            } catch (e) { console.warn('analyze', e); }
+            st.analyzing = false; A.refresh();
+          }
+          return;
         }
         if (f.matches('[data-audio]') && f.files[0]) { st.customMusic = { url: URL.createObjectURL(f.files[0]), name: f.files[0].name }; A.refresh(); return; }
         if (f.name === 'vstyle') { st.style = f.value; st.keepOriginal = null; A.refresh(); return; }
@@ -154,7 +179,7 @@
     signal = { cancelled: false };
     A.modal({
       title: 'עורכת את הסרטון…', size: 'narrow',
-      body: `<div style="text-align:center"><canvas id="vcanvas" style="width:min(100%,260px);border-radius:14px;background:#2e190c"></canvas>
+      body: `<div style="text-align:center"><canvas id="vcanvas" style="width:min(100%,260px);border-radius:14px;background:#26180e"></canvas>
         <div class="time-bar" style="height:8px;margin:14px 0 6px"><i id="vprog" style="width:0;background:var(--caramel)"></i></div>
         <div class="small muted" id="vtxt">מכינה…</div><p class="small muted">העריכה נעשית בזמן אמת — סרטון של ${st.target} שניות לוקח בערך ${st.target} שניות. השאירי את המסך פתוח.</p></div>`,
       foot: `<button class="btn ghost" data-cancel>ביטול</button>`,

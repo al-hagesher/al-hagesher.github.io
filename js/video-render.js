@@ -32,13 +32,14 @@
   }
   function grade(ctx, W, H, kind) {
     ctx.save();
-    if (kind === 'warm') { ctx.globalCompositeOperation = 'soft-light'; ctx.fillStyle = 'rgba(255,170,95,0.22)'; ctx.fillRect(0, 0, W, H); }
-    if (kind === 'vivid') { ctx.globalCompositeOperation = 'overlay'; ctx.fillStyle = 'rgba(255,200,150,0.12)'; ctx.fillRect(0, 0, W, H); }
-    if (kind === 'film') { ctx.globalCompositeOperation = 'soft-light'; ctx.fillStyle = 'rgba(255,160,90,0.18)'; ctx.fillRect(0, 0, W, H); ctx.globalCompositeOperation = 'multiply'; ctx.fillStyle = 'rgba(235,230,215,0.25)'; ctx.fillRect(0, 0, W, H); }
+    // גרדינג עדין — בלי הבזק כתום, רק חימום/קירור מתון
+    if (kind === 'warm') { ctx.globalCompositeOperation = 'soft-light'; ctx.fillStyle = 'rgba(210,180,140,0.08)'; ctx.fillRect(0, 0, W, H); }
+    if (kind === 'vivid') { ctx.globalCompositeOperation = 'soft-light'; ctx.fillStyle = 'rgba(200,170,130,0.05)'; ctx.fillRect(0, 0, W, H); }
+    if (kind === 'film') { ctx.globalCompositeOperation = 'soft-light'; ctx.fillStyle = 'rgba(180,170,150,0.1)'; ctx.fillRect(0, 0, W, H); }
     ctx.restore();
-    // וינייטה עדינה
-    const g = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.35, W / 2, H / 2, Math.max(W, H) * 0.75);
-    g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, kind === 'film' ? 'rgba(20,10,5,0.45)' : 'rgba(20,10,5,0.28)');
+    // וינייטה עדינה בחום-שוקולד ולא כתום
+    const g = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.4, W / 2, H / 2, Math.max(W, H) * 0.78);
+    g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, kind === 'film' ? 'rgba(15,10,6,0.4)' : 'rgba(15,10,6,0.22)');
     ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
   }
   function wrap(ctx, text, maxW) {
@@ -64,7 +65,7 @@
     const size = Math.round(W * 0.058); ctx.font = `700 ${size}px "Assistant", sans-serif`;
     const lines = wrap(ctx, text, W * 0.78), lh = size * 1.25, w = Math.min(W * 0.86, Math.max(...lines.map(l => ctx.measureText(l).width)) + size * 1.4), h = lines.length * lh + size * 0.7;
     const x = (W - w) / 2, y = H * 0.6 - h / 2, r = size * 0.6;
-    ctx.fillStyle = 'rgba(58,33,18,0.82)'; ctx.beginPath();
+    ctx.fillStyle = 'rgba(42,30,19,0.85)'; ctx.beginPath();
     ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); ctx.fill();
     ctx.fillStyle = '#f7ecdc'; lines.forEach((l, k) => ctx.fillText(l, W / 2, y + size * 0.35 + lh / 2 + k * lh));
     ctx.restore();
@@ -72,7 +73,7 @@
   // מסך סיום ממותג: רקע חום, לוגו שמנת, קריאה לפעולה
   function drawEnd(ctx, W, H, logo, cta, sub, t) {
     const g = ctx.createRadialGradient(W / 2, H * 0.42, 0, W / 2, H * 0.42, Math.max(W, H) * 0.75);
-    g.addColorStop(0, '#5a341c'); g.addColorStop(0.55, '#3f2413'); g.addColorStop(1, '#2e190c');
+    g.addColorStop(0, '#503c28'); g.addColorStop(0.55, '#3b2d1e'); g.addColorStop(1, '#26180e');
     ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
     const a = ease(Math.min(1, t / 0.6));
     ctx.save(); ctx.globalAlpha = a;
@@ -178,13 +179,14 @@
             const pv = segEl[i - 1]; if (pv !== v && pv.readyState >= 2) { ctx.save(); ctx.globalAlpha = 1 - (t - tm.from) / s.transDur; drawCover(ctx, pv, W, H, segs[i - 1].zoomTo); ctx.restore(); }
           }
           grade(ctx, W, H, S.grade);
-          if (s.trans === 'flash' && t - tm.from < 0.22) { ctx.fillStyle = `rgba(255,248,236,${0.85 * (1 - (t - tm.from) / 0.22)})`; ctx.fillRect(0, 0, W, H); }
+          // הבזק קצר ועדין — לא "פוצץ" בכתום. ~0.1 שנייה של רקע שוקולדי בהיר חצי-שקוף.
+          if (s.trans === 'flash' && t - tm.from < 0.1) { ctx.fillStyle = `rgba(240,232,220,${0.45 * (1 - (t - tm.from) / 0.1)})`; ctx.fillRect(0, 0, W, H); }
           // כותרת בשניות הראשונות
           if (t < 3) drawTitle(ctx, W, H, opts.title, t < 0.25 ? t / 0.25 : t > 2.5 ? (3 - t) / 0.5 : 1, S.text);
           // כיתוב שלב
           if (s.caption) { const ct = t - tm.from, d = Math.min(s.dur, 2.2); drawCaption(ctx, W, H, s.caption, ct < 0.2 ? ct / 0.2 : ct > d - 0.25 ? Math.max(0, (d - ct) / 0.25) : 1); }
           // מעבר רך אל מסך הסיום
-          if (i === segs.length - 1 && plan.endCard && tm.to - t < 0.35) { ctx.fillStyle = `rgba(46,25,12,${1 - (tm.to - t) / 0.35})`; ctx.fillRect(0, 0, W, H); }
+          if (i === segs.length - 1 && plan.endCard && tm.to - t < 0.35) { ctx.fillStyle = `rgba(38,24,14,${1 - (tm.to - t) / 0.35})`; ctx.fillRect(0, 0, W, H); }
         }
         if (musicGain && t > total - 1.6 && !musicGain._fading) { musicGain._fading = true; const n = ac.currentTime; musicGain.gain.cancelScheduledValues(n); musicGain.gain.setValueAtTime(musicGain.gain.value, n); musicGain.gain.linearRampToValueAtTime(0, n + Math.max(0.3, total - t)); }
         onFrame && onFrame(Math.min(1, t / total));

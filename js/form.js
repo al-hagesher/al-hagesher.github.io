@@ -182,7 +182,8 @@
           method: p.method, address: p.address || '', deliveryFee: +p.deliveryFee || 0, discount: 0, couponCode, couponDiscount, paid: 0, payMethod: '',
           items,
           source: 'טופס הזמנה', notes: [p.notes, ...itemNotes].filter(Boolean).join(' · '), allergies: p.allergies || '', status: 'new',
-          createdAt: (row.created_at || '').slice(0, 10) || U.today(), createdTs: row.created_at || '',
+          // התאריך המקומי (ישראל) — בלי זה הזמנה שנשלחה אחרי חצות נרשמה ביום הקודם
+          createdAt: row.created_at && !isNaN(new Date(row.created_at)) ? U.iso(new Date(row.created_at)) : U.today(), createdTs: row.created_at || '',
           payMode: p.payMode || 'none', payDue: +p.amountDue || 0, payClaim: claim
         };
         A.state.orders.push(o); added.push(o);

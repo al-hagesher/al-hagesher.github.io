@@ -7,11 +7,25 @@
   const payBadge = o => { const p = C.payState(o); return `<span class="badge ${p.cls}">${p.label}</span>`; };
   const itemsTxt = o => o.items.map(i => `${U.fmt(i.qty)}× ${i.name}`).join(', ');
   const dateBox = s => { const d = U.parse(s); return `<div class="date-box"><b>${d.getDate()}</b><span>${U.MONTHS[d.getMonth()].slice(0, 3)}׳ · ${U.DAYS[d.getDay()].slice(0, 1)}׳</span></div>`; };
+  // מתי ההזמנה נשלחה (מהטופס) או נרשמה (ידנית) — לפי שעון ישראל
+  A.sentAt = (o, short) => {
+    if (o.createdTs) {
+      const dt = new Date(o.createdTs); if (isNaN(dt)) return '';
+      const p = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jerusalem', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(dt);
+      const g = k => (p.find(x => x.type === k) || {}).value, day = `${g('year')}-${g('month')}-${g('day')}`, hm = `${g('hour')}:${g('minute')}`;
+      const mins = Math.round((Date.now() - dt) / 6e4);
+      const ago = mins < 1 ? 'עכשיו' : mins < 60 ? `לפני ${mins} דק׳` : mins < 24 * 60 ? `לפני ${Math.floor(mins / 60)} שע׳` : '';
+      const when = ['היום', 'אתמול'].includes(U.relDay(day)) ? `${U.relDay(day)} ב־${hm}` : `${U.dayName(day)} ${U.fmtDate(day)} ב־${hm}`;
+      return short ? when : when + (ago && ago !== 'עכשיו' ? ` (${ago})` : ago === 'עכשיו' ? ' (עכשיו)' : '');
+    }
+    return o.createdAt ? `${U.dayName(o.createdAt)} ${U.fmtDate(o.createdAt)}` : '';
+  };
   A.orderRow = o => {
     const t = C.orderTotals(o);
     return `<div class="list-item click" data-order="${o.id}">${dateBox(o.date)}
       <div class="main"><div class="t">${U.esc(o.customerName || 'ללא שם')} <span class="muted small">#${o.num}</span> ${o.method === 'delivery' ? `<span class="muted" title="משלוח">${A.icon('truck', 'inl')}</span>` : ''}</div>
-      <div class="s">${U.relDay(o.date)}${o.time ? ' ' + o.time : ''} · ${U.esc(itemsTxt(o))}</div></div>
+      <div class="s">${U.relDay(o.date)}${o.time ? ' ' + o.time : ''} · ${U.esc(itemsTxt(o))}</div>
+      ${o.createdTs && o.source === 'טופס הזמנה' ? `<div class="s small" style="opacity:.8">${A.icon('clock', 'inl')}נשלחה ${A.sentAt(o, true)}</div>` : ''}</div>
       <div style="text-align:end"><div class="money"><b>${U.money(t.total)}</b></div><div class="row" style="gap:4px;justify-content:flex-end;margin-top:3px">${statusBadge(o)}${o.status !== 'cancelled' ? payBadge(o) : ''}</div></div></div>`;
   };
 
@@ -103,7 +117,7 @@
     const msgs = waTemplates(o, t);
     A.modal({
       title: `הזמנה #${o.num} · ${U.esc(o.customerName || '')}`,
-      body: `<div class="row section">${statusBadge(o)}${o.status !== 'cancelled' ? payBadge(o) : ''}<span class="chip">${U.esc(o.source || '')}${o.formRef ? ' #' + o.formRef : ''}</span></div>
+      body: `<div class="row section">${statusBadge(o)}${o.status !== 'cancelled' ? payBadge(o) : ''}<span class="chip">${U.esc(o.source || '')}${o.formRef ? ' #' + o.formRef : ''}</span>${A.sentAt(o) ? `<span class="small muted" style="display:inline-flex;align-items:center;gap:4px">${A.icon('clock', 'inl')}${o.source === 'טופס הזמנה' ? 'נשלחה' : 'נרשמה'} ${A.sentAt(o)}</span>` : ''}</div>
         <div class="grid g2 section" style="gap:10px">
           <div><div class="muted small">מועד</div><b>${U.dayName(o.date)} ${U.fmtDate(o.date)}${o.time ? ' · ' + o.time : ''}</b> <span class="muted small">(${U.relDay(o.date)})</span></div>
           <div><div class="muted small">${o.method === 'delivery' ? 'משלוח לכתובת' : 'איסוף עצמי'}</div><b>${o.method === 'delivery' ? U.esc(o.address || '—') : '—'}</b></div>
@@ -137,7 +151,7 @@
           else if ('cancelunpaid' in b.dataset) { o.status = 'cancelled'; A.save(); A.refresh(); A.openOrder(o.id); A.undoToast('ההזמנה בוטלה', () => { o.status = 'new'; A.commit(); }); }
           else if ('paid' in b.dataset) { o.paid = C.orderTotals(o).total; A.save(); A.refresh(); A.openOrder(o.id); A.toast('התשלום נרשם'); }
           else if ('edit' in b.dataset) A.editOrder(o);
-          else if ('dup' in b.dataset) { const c = U.clone(o); Object.assign(c, { id: U.uid(), num: s.nextOrderNum++, status: 'new', paid: 0, demo: false, date: U.addDays(U.today(), 1), createdAt: U.today() }); A.state.orders.push(c); A.save(); A.editOrder(c); }
+          else if ('dup' in b.dataset) { const c = U.clone(o); Object.assign(c, { id: U.uid(), num: s.nextOrderNum++, status: 'new', paid: 0, demo: false, date: U.addDays(U.today(), 1), createdAt: U.today(), createdTs: new Date().toISOString(), source: '', formRef: undefined, payClaim: null }); A.state.orders.push(c); A.save(); A.editOrder(c); }
           else if ('print' in b.dataset) printSlip(o);
           else if ('del' in b.dataset) { A.closeModal(); if (await A.confirm(`למחוק את הזמנה #${o.num}? אם היא בוטלה, עדיף לסמן "בוטלה" כדי שתישאר בסטטיסטיקה.`, 'מחיקה')) { const idx = A.state.orders.indexOf(o); A.state.orders = A.state.orders.filter(x => x !== o); A.commit(); A.undoToast(`הזמנה #${o.num} נמחקה`, () => { A.state.orders.splice(idx, 0, o); A.commit(); }); } }
         });
@@ -210,7 +224,7 @@
           return `<article class="ord">
             <header><div><b>#${o.num}</b> · ${U.esc(o.customerName || 'ללא שם')}${o.phone ? ` · <span dir="ltr">${U.esc(o.phone)}</span>` : ''}</div>
               <div class="right"><b>${U.money(t.total)}</b>${t.balance ? `<span class="bal"> · יתרה ${U.money(t.balance)}</span>` : ''}</div></header>
-            <div class="meta">${o.time ? '⏰ ' + o.time + ' · ' : ''}${o.method === 'delivery' ? '🚚 משלוח: ' + U.esc(o.address || '') : '🛍 איסוף עצמי'}${o.allergies ? ` · <b>⚠ רגישויות: ${U.esc(o.allergies)}</b>` : ''}</div>
+            <div class="meta">${o.time ? '⏰ ' + o.time + ' · ' : ''}${o.method === 'delivery' ? '🚚 משלוח: ' + U.esc(o.address || '') : '🛍 איסוף עצמי'}${o.allergies ? ` · <b>⚠ רגישויות: ${U.esc(o.allergies)}</b>` : ''}${o.createdTs && o.source === 'טופס הזמנה' ? ` · <span class="muted">נשלחה ${A.sentAt(o, true)}</span>` : ''}</div>
             <ul class="items">${o.items.map(i => `<li>${U.fmt(i.qty)} × <b>${U.esc(i.name)}</b> ${i.unitPrice ? `<span class="muted">(${U.money(i.unitPrice)}/יח׳ · סה״כ ${U.money(i.qty * i.unitPrice)})</span>` : ''}${i.description ? `<div class="desc">${U.esc(i.description)}</div>` : ''}</li>`).join('')}</ul>
             ${o.notes ? `<div class="notes"><b>הערות:</b> ${U.esc(o.notes)}</div>` : ''}
           </article>`;
@@ -428,7 +442,7 @@
             if (its.some(i => !(i.qty > 0))) return A.toast('כמות חייבת להיות גדולה מ־0');
             update();
             if (d.couponErr) { const ci = w.querySelector('[name=couponCode]'); ci.focus(); return A.toast(`קוד הקופון לא תקף: ${d.couponErr}. תקני או מחקי אותו`); }
-            const target = o || { id: U.uid(), num: s.nextOrderNum++, createdAt: U.today() };
+            const target = o || { id: U.uid(), num: s.nextOrderNum++, createdAt: U.today(), createdTs: new Date().toISOString() };
             Object.assign(target, v, { method, items: its, deliveryFee: method === 'delivery' ? (v.deliveryFee || 0) : 0, discount: v.discount || 0, paid: v.paid || 0, couponCode: d.couponCode || '', couponDiscount: d.couponDiscount || 0, demo: false });
             if (method !== 'delivery') target.address = '';
             if (isNew) A.state.orders.push(target);

@@ -31,11 +31,21 @@
   // ---------- חישובים ----------
   // ישראל: התאריך של היום לפי שעון ירושלים
   const todayIL = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jerusalem', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+  // שעת סגירה: ההזמנות ליום מסוים נסגרות leadDays ימים לפניו בשעה הזו (שעון ישראל). ריק = עד סוף היום.
+  const cutMin = () => { const m = /^(\d{1,2}):(\d{2})$/.exec(String(cfg.cutoffTime || '')); return m ? +m[1] * 60 + +m[2] : null; };
+  const nowMinIL = () => { const n = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Jerusalem' })); return n.getHours() * 60 + n.getMinutes(); };
+  const onlyDates = () => (Array.isArray(cfg.onlyDates) ? cfg.onlyDates : []).filter(s => /^\d{4}-\d{2}-\d{2}$/.test(s));
+  const deadlineText = () => {
+    const c = cutMin(), lead = +cfg.leadDays || 0; if (c === null) return '';
+    return `ההזמנות לכל יום נסגרות ${lead === 0 ? 'באותו יום' : lead === 1 ? 'יום לפני' : lead + ' ימים לפני'} בשעה ${cfg.cutoffTime}`;
+  };
   function availableDates() {
-    const out = [], t = parse(todayIL());
-    for (let i = cfg.leadDays || 0; i <= (cfg.maxDaysAhead || 30); i++) {
+    const out = [], t = parse(todayIL()), only = onlyDates(), lead = +cfg.leadDays || 0, c = cutMin();
+    for (let i = lead; i <= (cfg.maxDaysAhead || 30); i++) {
       const d = new Date(t); d.setDate(t.getDate() + i); const s = iso(d), day = cfg.days[d.getDay()];
-      if (!day || !day.on || (cfg.blocked || []).includes(s)) continue;
+      if (i === lead && c !== null && nowMinIL() >= c) continue; // עבר זמן הסגירה להיום הזה
+      if (only.length ? !only.includes(s) : (!day || !day.on)) continue;
+      if ((cfg.blocked || []).includes(s)) continue;
       out.push({ s, d, i, full: cfg.capacity > 0 && ((cfg.load || {})[s] || 0) >= cfg.capacity });
     }
     return out;
@@ -180,8 +190,11 @@
     const dates = availableDates(), box = $('#when'); if (!box) return;
     if (st.date && !dates.some(d => d.s === st.date && !d.full)) st.date = '';
     const sl = slots(st.date); if (st.time && !sl.includes(st.time)) st.time = '';
-    if (!dates.length) { box.innerHTML = '<div class="err">אין כרגע תאריכים פנויים להזמנה.</div>'; return; }
-    box.innerHTML = `<div class="dates" id="dates">${dates.map(d => `<button type="button" class="dchip ${st.date === d.s ? 'on' : ''}" aria-pressed="${st.date === d.s}" data-date="${d.s}" ${d.full ? 'disabled' : ''} aria-label="יום ${DAYS[d.d.getDay()]} ${fmtD(d.s)}${d.full ? ' — מלא' : ''}"><small>${d.i === 0 ? 'היום' : d.i === 1 ? 'מחר' : 'יום ' + DAYS[d.d.getDay()]}</small><b>${d.d.getDate()}</b><small>${d.full ? 'מלא' : MONTHS[d.d.getMonth()]}</small></button>`).join('')}</div>
+    const dl = deadlineText();
+    if (!dates.length) { box.innerHTML = `<div class="err">אין כרגע תאריכים פנויים להזמנה.${dl ? `<br><small>${esc(dl)}.</small>` : ''}</div>`; return; }
+    // כמה זמן נשאר להזמין ליום הראשון ברשימה, כשזה היום האחרון שאפשר
+    const first = dates[0], c = cutMin(), soon = c !== null && first.i === (+cfg.leadDays || 0) ? c - nowMinIL() : null;
+    box.innerHTML = `${dl ? `<p class="note deadline">⏰ ${esc(dl)}${soon !== null && soon > 0 ? ` · להזמנה ליום ${DAYS[first.d.getDay()]} נשארו ${soon >= 60 ? Math.floor(soon / 60) + ' שעות' + (soon % 60 ? ' ו־' + (soon % 60) + ' דק׳' : '') : soon + ' דקות'}` : ''}</p>` : ''}<div class="dates" id="dates">${dates.map(d => `<button type="button" class="dchip ${st.date === d.s ? 'on' : ''}" aria-pressed="${st.date === d.s}" data-date="${d.s}" ${d.full ? 'disabled' : ''} aria-label="יום ${DAYS[d.d.getDay()]} ${fmtD(d.s)}${d.full ? ' — מלא' : ''}"><small>${d.i === 0 ? 'היום' : d.i === 1 ? 'מחר' : 'יום ' + DAYS[d.d.getDay()]}</small><b>${d.d.getDate()}</b><small>${d.full ? 'מלא' : MONTHS[d.d.getMonth()]}</small></button>`).join('')}</div>
       ${st.date && sl.length ? `<div class="lbl">שעה ${st.method === 'delivery' ? 'משוערת למשלוח' : 'לאיסוף'}</div><div class="times" id="times">${sl.map(t => `<button type="button" class="chip ${st.time === t ? 'on' : ''}" aria-pressed="${st.time === t}" data-time="${t}">${t}</button>`).join('')}</div>`
         : st.date && cfg.slotMinutes ? '<p class="note">לא נשארו שעות פנויות ביום הזה — בחרי יום אחר.</p>' : !st.date ? '<p class="note">בחרי יום כדי לראות את השעות.</p>' : ''}`;
     const on = box.querySelector('.dchip.on'), row = $('#dates');
@@ -200,8 +213,9 @@
     cats = []; cfg.products.forEach(p => { const c = p.cat || ''; if (!cats.includes(c)) cats.push(c); });
     const onDays = [0, 1, 2, 3, 4, 5, 6].filter(i => cfg.days[i] && cfg.days[i].on), dl = cfg.delivery;
     const pills = [
-      onDays.length === 7 ? 'כל יום' : onDays.length ? 'ימי ' + onDays.map(i => DAYS[i]).join(', ') : '',
-      cfg.leadDays > 0 ? (cfg.leadDays === 1 ? 'להזמין יום מראש' : `להזמין ${cfg.leadDays} ימים מראש`) : '',
+      onlyDates().length ? '' : onDays.length === 7 ? 'כל יום' : onDays.length ? 'ימי ' + onDays.map(i => DAYS[i]).join(', ') : '',
+      cutMin() !== null ? (+cfg.leadDays === 1 ? `הזמנה עד יום לפני, ${cfg.cutoffTime}` : +cfg.leadDays > 1 ? `הזמנה עד ${cfg.leadDays} ימים לפני, ${cfg.cutoffTime}` : `הזמנה עד ${cfg.cutoffTime} באותו יום`)
+        : cfg.leadDays > 0 ? (cfg.leadDays === 1 ? 'להזמין יום מראש' : `להזמין ${cfg.leadDays} ימים מראש`) : '',
       +cfg.minOrder ? `מינימום ${money(+cfg.minOrder)}` : '',
       +cfg.minItems > 1 ? `מינימום ${+cfg.minItems} ${minWord()}` : '',
       dl.on ? (+dl.freeAbove ? `משלוח חינם מעל ${money(+dl.freeAbove)}` : 'יש משלוחים') : 'איסוף עצמי'
@@ -209,7 +223,7 @@
     const fld = (id, k, label, extra) => `<label class="fld"><span>${label}</span><input id="${id}" data-f="${k}" value="${esc(st[k])}" ${extra || ''}><small class="ferr" id="e_${id}"></small></label>`;
     app.innerHTML = `
       ${preview ? '<div class="preview-banner">תצוגה מקדימה — הזמנות לא נשלחות מכאן</div>' : ''}
-      <div class="hero"><h1>${esc(cfg.title)}</h1>${cfg.intro ? `<p class="intro">${esc(cfg.intro)}</p>` : ''}<div class="pills">${pills.map(t => `<span class="pill">${esc(t)}</span>`).join('')}</div><div id="gift" aria-live="polite"></div></div>
+      <div class="hero"><h1>${esc(cfg.title)}</h1>${cfg.intro ? `<p class="intro">${esc(cfg.intro)}</p>` : ''}${String(cfg.daysNote || '').trim() ? `<div class="daysnote"><span aria-hidden="true">📅</span><span>${esc(String(cfg.daysNote).trim().slice(0, 300))}</span></div>` : ''}<div class="pills">${pills.map(t => `<span class="pill">${esc(t)}</span>`).join('')}</div><div id="gift" aria-live="polite"></div></div>
       <section id="s-menu"><h2><span class="n">1</span>מה תרצי להזמין?</h2>
         ${cats.length > 1 ? `<nav class="cats" id="cats" aria-label="קטגוריות">${cats.map((c, i) => `<button type="button" data-cat="${i}" class="${i ? '' : 'on'}">${esc(c || 'עוד')}</button>`).join('')}</nav>` : ''}
         ${cats.map((c, i) => `<div class="catsec" id="cat-${i}" data-ci="${i}">${cats.length > 1 ? `<h3 class="cat">${esc(c || 'עוד')}</h3>` : ''}<div class="card">${cfg.products.filter(p => (p.cat || '') === c).map(prodHtml).join('')}</div></div>`).join('')}

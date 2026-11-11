@@ -80,7 +80,9 @@
       v: 2, bizName: s.businessName, phone: U.phoneIntl(s.phone), open: !!f.open, closedMsg: f.closedMsg, title: f.title, intro: f.intro,
       pickupAddress: f.pickupAddress, payInfo: f.payInfo, terms: f.terms, cancellationPolicy: s.cancellationPolicy || '', leadDays: +f.leadDays || 0, maxDaysAhead: +f.maxDaysAhead || 30,
       capacity: +f.capacity || 0, slotMinutes: +f.slotMinutes || 0, minOrder: +f.minOrder || 0,
-      minItems: Math.max(0, Math.round(+f.minItems || 0)), minItemsWord: String(f.minItemsWord || '').trim().slice(0, 20), blocked: f.blocked.filter(d => d >= t),
+      minItems: Math.max(0, Math.round(+f.minItems || 0)), minItemsWord: String(f.minItemsWord || '').trim().slice(0, 20),
+      cutoffTime: /^\d{2}:\d{2}$/.test(f.cutoffTime || '') ? f.cutoffTime : '', daysNote: String(f.daysNote || '').trim().slice(0, 300),
+      onlyDates: (f.onlyDates || []).filter(d => d >= t).sort(), blocked: f.blocked.filter(d => d >= t),
       pay: { mode: f.pay.mode, pct: +f.pay.pct || 50, bit: f.pay.bit || s.phone || '', bitLink: A.safeUrl(f.pay.bitLink), paybox: A.safeUrl(f.pay.paybox), hours: +f.pay.hours || 24 },
       days: f.days, delivery: { on: !!f.delivery.on, fee: +f.delivery.fee || 0, freeAbove: +f.delivery.freeAbove || 0, note: f.delivery.note || '' },
       products, coupons, load: F.load()
@@ -241,8 +243,8 @@
     const names = l => l.slice(0, 3).map(i => i.name).join(', ') + (l.length > 3 ? '…' : '');
     if (!f.open) add('warn', 'הטופס סגור כרגע — הלקוחות רואות הודעת "סגור"');
     if (!s.phone) add('bad', 'חסר מספר הוואטסאפ של העסק — בלי זה הלקוחה לא יכולה לשלוח לך אישור', '', '#/settings');
-    if (!Object.values(f.days).some(d => d.on)) add('bad', 'לא נבחר אף יום איסוף', 'days');
-    const ok = shown.filter(i => i.price > 0), noPrice = shown.filter(i => !(i.price > 0));
+    const only = (f.onlyDates || []).filter(d => d >= U.today());
+    if (!only.length && !Object.values(f.days).some(d => d.on)) add('bad', 'לא נבחר אף יום איסוף', 'days');    const ok = shown.filter(i => i.price > 0), noPrice = shown.filter(i => !(i.price > 0));
     if (!ok.length) add('bad', 'אין אף מוצר מוצג עם מחיר', 'products');
     if (noPrice.length) add('warn', `${noPrice.length} מוצרים מסומנים להצגה אבל בלי מחיר, ולכן לא מופיעים: ${names(noPrice)}`, 'products');
     if (f.pay.mode !== 'none' && !(f.pay.bit || s.phone || f.pay.bitLink || f.pay.paybox)) add('bad', 'נדרש תשלום מראש, אבל אין מספר ביט או קישור תשלום', 'pay');
@@ -318,9 +320,15 @@
       <div class="form-grid c4" style="margin-top:14px">
         <label class="field"><span>בחירת שעה</span><select data-p="slotMinutes" data-num="1">${A.opts([[0, 'בלי בחירת שעה'], [15, 'כל רבע שעה'], [30, 'כל חצי שעה'], [60, 'כל שעה'], [120, 'כל שעתיים']], f.slotMinutes)}</select></label>
         <label class="field"><span>כמה ימים מראש לפחות</span><input type="number" min="0" max="30" data-p="leadDays" data-num="1" value="${f.leadDays}"><small>0 = אפשר להזמין להיום</small></label>
+        <label class="field"><span>שעת סגירת ההזמנות</span><input type="time" data-p="cutoffTime" value="${U.esc(f.cutoffTime || '')}"><small>${f.cutoffTime ? `ההזמנות לכל יום נסגרות ${+f.leadDays === 0 ? 'באותו יום' : +f.leadDays === 1 ? 'יום לפני' : f.leadDays + ' ימים לפני'} ב־${U.esc(f.cutoffTime)}${+f.leadDays === 1 && f.days[5] && f.days[5].on ? ' (לשישי — עד חמישי ב־' + U.esc(f.cutoffTime) + ')' : ''}` : 'ריק = אפשר להזמין עד סוף היום'}</small></label>
         <label class="field"><span>עד כמה ימים קדימה</span><input type="number" min="1" max="180" data-p="maxDaysAhead" data-num="1" value="${f.maxDaysAhead}"></label>
         <label class="field"><span>מקסימום הזמנות ליום</span><input type="number" min="0" data-p="capacity" data-num="1" value="${f.capacity}"><small>0 = ללא הגבלה. נספרות גם הזמנות שהזנת ידנית</small></label>
       </div>
+      <label class="field" style="margin-top:14px"><span>מתי אפשר להזמין — הודעה שמופיעה מודגשת בראש הטופס</span><textarea data-p="daysNote" rows="2" maxlength="300" placeholder="למשל: הזמנות לשישי בלבד · איסוף בין 10:00 ל־13:00 · ההזמנות נסגרות בחמישי ב־18:00">${U.esc(f.daysNote || '')}</textarea><small>לא חובה. אם ריק — לא מוצג</small></label>
+      <div class="field" style="margin-top:14px"><span>רק בתאריכים מסוימים (לא חובה)</span>
+        <div class="row"><input type="date" id="openDate" min="${U.today()}" style="width:auto" aria-label="תאריך פתוח להזמנה"><button class="btn sm ghost" data-act="openDate">${A.icon('plus')}הוספה</button></div>
+        <div class="row" style="margin-top:6px">${(f.onlyDates || []).filter(d => d >= U.today()).sort().map(d => `<span class="chip">${U.dayName(d)} ${U.fmtDate(d)} <button class="icon-btn" data-unopen="${d}" style="padding:0" aria-label="הסרה">${A.icon('x', 'inl')}</button></span>`).join('') || '<span class="small muted">לא נבחרו — אפשר להזמין לכל הימים המסומנים למעלה</span>'}</div>
+        ${(f.onlyDates || []).some(d => d >= U.today()) ? '<small>כשיש כאן תאריכים — הלקוחות יכולות להזמין <b>רק</b> אליהם (השעות לפי היום בשבוע שלמעלה)</small>' : '<small>למשל לחנוכה: מוסיפים את התאריכים שבהם יש סופגניות, ורק הם יופיעו בטופס</small>'}</div>
       <div class="field" style="margin-top:14px"><span>תאריכים סגורים (חגים, חופשה)</span>
         <div class="row"><input type="date" id="blockDate" min="${U.today()}" style="width:auto" aria-label="תאריך לסגירה"><button class="btn sm ghost" data-act="block">${A.icon('plus')}הוספה</button></div>
         <div class="row" style="margin-top:6px">${f.blocked.filter(d => d >= U.today()).sort().map(d => `<span class="chip">${U.dayName(d)} ${U.fmtDate(d)} <button class="icon-btn" data-unblock="${d}" style="padding:0" aria-label="הסרה">${A.icon('x', 'inl')}</button></span>`).join('') || '<span class="small muted">אין</span>'}</div></div>
@@ -532,11 +540,11 @@
         setPath(el.dataset.p, v);
         if (el.dataset.p === 'open') { A.commit(v ? 'הטופס נפתח להזמנות' : 'הטופס נסגר להזמנות'); return; }
         saved();
-        if (el.type === 'checkbox' || el.tagName === 'SELECT') drawTab();
+        if (el.type === 'checkbox' || el.tagName === 'SELECT' || ['cutoffTime', 'leadDays', 'minItems'].includes(el.dataset.p)) drawTab();
       };
       main.onclick = async e => {
         if (e.target.matches('[data-selectall]')) { e.target.select(); return; }
-        const b = e.target.closest('[data-tab],[data-filter],[data-move],[data-catmove],[data-edit],[data-bulk],[data-unblock],[data-act]'); if (!b) return;
+        const b = e.target.closest('[data-tab],[data-filter],[data-move],[data-catmove],[data-edit],[data-bulk],[data-unblock],[data-unopen],[data-act]'); if (!b) return;
         const d = b.dataset;
         if (d.tab) { ui.tab = d.tab; drawTab(); if (b.classList.contains('fp-link')) $('.fp-tabs').scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
         if (d.filter) { ui.filter = d.filter; drawTab(); return; }
@@ -568,10 +576,16 @@
           A.toast({ show: 'המוצרים מוצגים בטופס', hide: 'המוצרים הוסתרו', parve: `${items.length} מוצרים סומנו פרווה`, dairy: `${items.length} מוצרים סומנו חלבי` }[d.bulk]); return;
         }
         if (d.unblock) { f.blocked = f.blocked.filter(x => x !== d.unblock); saved(); drawTab(); return; }
+        if (d.unopen) { f.onlyDates = (f.onlyDates || []).filter(x => x !== d.unopen); saved(); drawTab(); A.toast(f.onlyDates.some(x => x >= U.today()) ? 'התאריך הוסר' : 'התאריך הוסר — אפשר שוב להזמין לכל הימים המסומנים'); return; }
         const act = d.act;
         if (act === 'copy') A.copy(link);
         if (act === 'preview') { b.disabled = true; try { await openPreview(); } finally { b.disabled = false; } }
         if (act === 'publish') { const ok = await F.publish(true); A.toast(ok ? 'הטופס עודכן' : 'הפרסום נכשל — בדקי אינטרנט'); }
+        if (act === 'openDate') {
+          const v = $('#openDate').value; if (!v) { A.toast('בחרי תאריך'); return; }
+          f.onlyDates = (f.onlyDates || []).filter(x => x >= U.today());
+          if (!f.onlyDates.includes(v)) { f.onlyDates.push(v); f.onlyDates.sort(); saved(); drawTab(); A.toast(`נפתח להזמנות: ${U.dayName(v)} ${U.fmtDate(v)}`); }
+        }
         if (act === 'block') { const v = $('#blockDate').value; if (v && !f.blocked.includes(v)) { f.blocked.push(v); saved(); drawTab(); A.toast('התאריך נסגר להזמנות'); } }
         if (act === 'notif') { try { const r = await Notification.requestPermission(); A.toast(r === 'granted' ? 'התראות הופעלו' : 'ההתראות לא אושרו בדפדפן'); A.refresh(); } catch (err) { } }
         if (act === 'cpAdd') openEdit(null);

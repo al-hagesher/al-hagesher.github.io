@@ -625,3 +625,27 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: non
   .print-only { display: block !important; }
 }
 .print-only { display: none; }
+
+/* ---------- סטודיו סרטונים: ציר הזמן של מה שהעורכת זיהתה בכל קליף ---------- */
+.vt { position: relative; margin-top: 7px; padding: 3px 0; }
+.vt-bar { display: flex; height: 10px; border-radius: 5px; overflow: hidden; background: var(--sand); }
+.vt-bar i, .vt-legend i { display: block; height: 100%; flex: none; }
+.vt-action { background: #7d9a6c; }
+.vt-peak { background: #5c7fa3; }
+.vt-steady { background: #c49a4a; }
+.vt-still { background: #c8b394; }
+.vt-idle { background: repeating-linear-gradient(135deg, #d9d0c5 0 3px, #ebe4da 3px 6px); }
+.vt-bad { background: repeating-linear-gradient(135deg, #b9846f 0 3px, #e3cfc4 3px 6px); }
+.vt-use { position: absolute; top: 0; bottom: 0; border: 2px solid var(--brown); border-radius: 4px; box-sizing: border-box; pointer-events: none; }
+.vt-use.slow { border-color: #3f6188; }
+.vt-use.fast { border-color: #8a6420; }
+.vt-legend { display: flex; flex-wrap: wrap; gap: 6px 12px; margin-top: 10px; color: var(--muted); }
+.vt-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.vt-legend i { width: 14px; height: 9px; border-radius: 3px; }
+.vt-legend .vt-sw-use { background: transparent; border: 2px solid var(--brown); width: 14px; height: 10px; box-sizing: border-box; }
+.vt-plan { margin: 0 0 10px; }
+.vt-plan summary { cursor: pointer; padding: 4px 0; }
+.vt-plan ol { margin: 6px 0 0; padding-inline-start: 20px; line-height: 1.8; }
+.vt-sp { font-weight: 700; padding: 0 5px; border-radius: 4px; }
+.vt-sp.slow { background: #e3ebf3; color: #3f6188; }
+.vt-sp.fast { background: #f3e9d6; color: #8a6420; }

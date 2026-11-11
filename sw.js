@@ -1,5 +1,5 @@
 ﻿/* על הגשר — עבודה גם בלי אינטרנט (כשהאפליקציה מותקנת מכתובת אינטרנט) */
-const CACHE = 'al-hagesher-202611120030';
+const CACHE = 'al-hagesher-202611121000';
 const FILES = ['./', 'index.html', 'order.html', 'css/style.css', 'css/fonts.css', 'assets/fonts/Assistant-hebrew.woff2', 'assets/fonts/Assistant-latin.woff2', 'assets/fonts/FrankRuhlLibre-hebrew.woff2', 'assets/fonts/FrankRuhlLibre-latin.woff2', 'assets/fonts/Bellefair-hebrew.woff2', 'assets/fonts/Bellefair-latin.woff2', 'assets/vendor/qrcode.min.js', 'assets/logo.png', 'assets/logo-brown.png', 'assets/logo-cream.png', 'assets/icon.png', 'assets/icon-192.png', 'assets/icon-512.png', 'assets/apple-touch-icon.png', 'manifest.webmanifest',
   'js/theme.js', 'js/order.js', 'js/core.js', 'js/seed.js', 'js/library.js', 'js/ui.js', 'js/sync.js', 'js/receipts.js', 'js/video-plan.js', 'js/video-analyze.js', 'js/music.js', 'js/video-render.js', 'js/pages/video.js', 'js/form.js', 'js/app.js', 'js/pages/dashboard.js', 'js/pages/recipes.js', 'js/pages/pantry.js', 'js/pages/orders.js',
   'js/pages/coupons.js', 'js/pages/assistant.js',

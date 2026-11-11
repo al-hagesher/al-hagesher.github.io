@@ -1,7 +1,21 @@
 /* על הגשר — סטודיו סרטונים: מעלים קליפים, בוחרים אורך וסגנון, והאפליקציה עורכת רילס מוכן לאינסטגרם */
 (function (root) {
   const A = root.App, U = A.util, P = A.pages = A.pages || {};
-  const st = { clips: [], target: 30, style: 'calm', format: '9:16', hq: false, title: '', description: '', cta: 'להזמנות — הקישור בפרופיל 🤎', music: 'auto', keepOriginal: null, customMusic: null, result: null, rendering: false };
+  const st = { clips: [], target: 30, style: 'calm', format: '9:16', hq: false, title: '', description: '', cta: 'להזמנות — הקישור בפרופיל 🤎', music: 'auto', keepOriginal: null, customMusic: null, result: null, rendering: false, autoSpeed: true };
+  const planOpts = mu => ({ target: st.target, style: st.style, bpm: mu && mu.bpm, description: st.description, autoSpeed: st.autoSpeed });
+  // ציר הזמן של קליף: מה העורכת הבינה (צבעים) ואיזה קטעים נכנסו לסרטון (מסגרת)
+  const KIND = { action: 'פעולה', peak: 'רגע שיא → הילוך איטי', steady: 'תהליך ארוך → מואץ', still: 'פריים יציב ויפה', idle: 'זמן מת → נחתך', bad: 'חשוך / מטושטש / רועד → נחתך' };
+  const timeline = (c, k, plan) => {
+    const an = c.analysis; if (!an || !an.moments || !(an.duration > 0)) return '';
+    const D = an.duration, pct = x => Math.max(0, Math.min(100, x / D * 100));
+    const used = plan ? plan.segments.filter(s => s.clip === k) : [];
+    return `<div class="vt" dir="ltr" aria-hidden="true"><div class="vt-bar">${an.moments.map(m => `<i class="vt-${m.kind}" style="width:${pct(m.b - m.a)}%" title="${KIND[m.kind] || ''} · ${U.round(m.a, 1)}–${U.round(m.b, 1)} ש׳"></i>`).join('')}</div>
+      ${used.map(s => `<b class="vt-use ${s.speed < 0.95 ? 'slow' : s.speed > 1.45 ? 'fast' : ''}" style="left:${pct(s.start)}%;width:${Math.max(1.5, pct(s.dur * s.speed))}%"></b>`).join('')}</div>`;
+  };
+  const clipChips = an => {
+    const sm = an && (an.summary || (A.summarizeAnalysis && A.summarizeAnalysis(an))); if (!sm) return [];
+    return [sm.cut >= 0.5 && `✂️ ${U.round(sm.cut, 1)} ש׳ נחתכים`, sm.slow && `🐢 ${sm.slow === 1 ? 'רגע שיא' : sm.slow + ' רגעי שיא'} → הילוך איטי`, sm.fast >= 2 && `⏩ ${U.round(sm.fast, 1)} ש׳ תהליך → מואץ`, an.tags.dark && 'חשוך', an.tags.shaky && 'הרבה רעידות'].filter(Boolean);
+  };
   let previewAudio = null, signal = null;
 
   const musicFor = () => {
@@ -36,7 +50,7 @@
         main.innerHTML = `<div class="card empty"><h3>הדפדפן הזה לא תומך בעריכת וידאו</h3><p>פתחי את האפליקציה בכרום (מחשב/אנדרואיד) או בספארי מעודכן באייפון.</p></div>`; return;
       }
       const total = U.sum(st.clips, c => c.duration), S = A.VIDEO_STYLES[st.style], mu = musicFor();
-      const plan = st.clips.length ? A.planEdit(st.clips, { target: st.target, style: st.style, bpm: mu && mu.bpm, description: st.description }) : null;
+      const plan = st.clips.length ? A.planEdit(st.clips, planOpts(mu)) : null;
       main.innerHTML = `
       ${st.result ? resultCard() : ''}
       <div class="grid g2 section" style="align-items:start">
@@ -44,28 +58,30 @@
           <div class="card"><div class="card-h"><h3>${A.icon('play')}1. הקליפים שלך</h3><span class="small muted">${st.clips.length ? `${st.clips.length} קליפים · ${fmtDur(total)}` : ''}</span></div>
             <label class="btn" style="width:100%">${A.icon('upload')}הוספת קליפים מהגלריה / צילום<input type="file" accept="video/*" multiple data-files hidden></label>
             <p class="small muted" style="margin:8px 0 0">סדר הקליפים = סדר הסיפור. סמני ⭐ על הקליף של המוצר המוגמר — ממנו נפתח ונסיים.</p>
-            ${st.analyzing ? `<div class="small muted" style="margin:8px 0;padding:8px 10px;background:var(--sand-2);border-radius:8px" data-analyzer>מנתחת קליפים — מודדת בהירות, חדות ותנועה כדי לבחור את הרגעים הכי טובים</div>` : ''}
+            ${st.analyzing ? `<div class="small muted" style="margin:8px 0;padding:8px 10px;background:var(--sand-2);border-radius:8px" data-analyzer>צופה בקליפים — מזהה פעולה, רגעי שיא, תהליכים ארוכים, זמן מת ורעידות</div>` : ''}
             <div id="clipList" style="margin-top:10px">${st.clips.map((c, k) => {
               const an = c.analysis;
-              const tags = an ? [
-                an.tags.dark && 'חשוך', an.tags.blurry && 'לא חד', an.tags.static && 'סטטי · מתאים לחשיפה', an.tags.action && 'תנועה · מתאים לבודי'
-              ].filter(Boolean) : [];
+              const tags = clipChips(an);
               return `<div class="list-item" data-k="${k}">
               <div style="width:54px;height:72px;border-radius:8px;overflow:hidden;background:var(--sand);flex:none;position:relative">${c.thumb ? `<img src="${c.thumb}" alt="" style="width:100%;height:100%;object-fit:cover">` : ''}${an ? `<span style="position:absolute;bottom:2px;left:2px;background:rgba(0,0,0,.6);color:#fff;font-size:.65rem;padding:1px 4px;border-radius:4px">${Math.round(an.avgQuality * 100)}</span>` : ''}</div>
               <div class="main"><div class="t">${k + 1}. ${fmtDur(c.duration)} ${c.hero ? '<span class="badge brown">⭐ מוצר מוגמר</span>' : ''}</div>
                 ${tags.length ? `<div class="small muted" style="margin-top:2px">${tags.map(t => `<span class="chip" style="font-size:.72rem;padding:1px 6px;margin:0 2px">${t}</span>`).join('')}</div>` : ''}
+                ${timeline(c, k, plan)}
                 <input data-cap="${k}" value="${U.esc(c.caption)}" placeholder="${st.style === 'recipe' ? `כיתוב לשלב (ברירת מחדל: שלב ${k + 1})` : 'כיתוב (לא חובה)'}" style="min-height:34px;padding:5px 9px;margin-top:4px"></div>
               <div class="row" style="gap:2px;flex-direction:column">
                 <button class="icon-btn" data-hero="${k}" aria-label="סימון כמוצר מוגמר">${A.icon('star')}</button>
                 <div class="row" style="gap:0"><button class="icon-btn" data-up="${k}" aria-label="להעלות" ${k ? '' : 'disabled'}>${A.icon('right')}</button><button class="icon-btn" data-down="${k}" aria-label="להוריד" ${k < st.clips.length - 1 ? '' : 'disabled'}>${A.icon('left')}</button></div>
                 <button class="icon-btn" data-del="${k}" aria-label="הסרה">${A.icon('trash')}</button></div></div>`;
             }).join('')}</div>
+            ${st.clips.some(c => c.analysis && c.analysis.moments) ? `<div class="vt-legend small">${['action', 'peak', 'steady', 'still', 'idle', 'bad'].map(k => `<span><i class="vt-${k}"></i>${KIND[k]}</span>`).join('')}<span><i class="vt-sw-use"></i>נכנס לסרטון</span></div>` : ''}
           </div>
           <div class="card"><div class="card-h"><h3>${A.icon('star')}טיפים לצילום שעובד</h3></div>
             <ul class="install-steps small" style="line-height:1.9">
               <li><b>מצלמים לאורך</b> (9:16), באור יום מהחלון — לא מתחת לנורה צהובה.</li>
               <li>כל קליפ <b>3–8 שניות</b>, מצלמה יציבה (להשעין על משהו). כמה זוויות: מלמעלה, מהצד, תקריב.</li>
               <li><b>מצלמים את הרגעים הטעימים:</b> חיתוך לתוך העוגה, שוקולד נמס, אבקת סוכר נופלת, בצק נמתח.</li>
+              <li>את רגעי השיא האלה כדאי לצלם ב־<b>60fps או במצב Slo-mo</b> של הטלפון — ככה ההילוך האיטי ייצא חלק ולא "קופצני".</li>
+              <li>תהליך ארוך (ערבוב, לישה, טיגון) — אפשר לצלם כמה שצריך: העורכת מזהה אותו ומאיצה, ואת הזמן המת באמצע היא חותכת.</li>
               <li>הקליף של <b>המוצר המוגמר</b> הכי חשוב — ממנו נפתח את הסרטון (הוק בשנייה הראשונה) ובו נסיים.</li>
               <li>להשאיר מרווח מהשוליים: אינסטגרם מכסה את החלק העליון והתחתון של המסך.</li>
             </ul></div>
@@ -88,13 +104,17 @@
               <div class="field"><span>&nbsp;</span><div class="row">${mu ? `<button class="btn sm ghost" data-act="preview">${A.icon(previewAudio && !previewAudio.paused ? 'x' : 'play')}${previewAudio && !previewAudio.paused ? 'עצירה' : 'האזנה'}</button>` : ''}
                 ${st.music === 'custom' ? `<label class="btn sm soft">${A.icon('upload')}${st.customMusic ? U.esc(st.customMusic.name.slice(0, 18)) : 'בחירת קובץ'}<input type="file" accept="audio/*" data-audio hidden></label>` : ''}</div></div>
               <label class="row full" style="gap:8px"><input type="checkbox" data-f="keepOriginal" ${keepOrig() ? 'checked' : ''}> לשמור את הצליל המקורי מהקליפים (ASMR: חיתוך, ערבוב, קראנץ׳)</label>
+              <label class="row full" style="gap:8px"><input type="checkbox" data-f="autoSpeed" ${st.autoSpeed ? 'checked' : ''}> הילוך איטי ומהיר אוטומטי — רגעי שיא באיטי, תהליכים ארוכים מואצים</label>
               <label class="field"><span>פורמט</span><select data-f="format">${A.opts([['9:16', 'רילס / טיקטוק / סטורי (9:16)'], ['4:5', 'פוסט בפיד (4:5)'], ['1:1', 'ריבוע (1:1)']], st.format)}</select></label>
               <label class="field"><span>איכות</span><select data-f="hq">${A.opts([['0', 'רגילה (720p) — מהיר'], ['1', 'גבוהה (1080p)']], st.hq ? '1' : '0')}</select></label>
             </div>
             <p class="small muted" style="margin:8px 0 0">כל המוזיקה כאן חופשית לשימוש מסחרי (CC0). אפשר גם לייצא בלי מוזיקה ולהוסיף צליל טרנדי באינסטגרם.</p>
           </div>
           <div class="card">
-            ${plan && plan.segments.length ? `<p class="small" style="margin:0 0 10px">${plan.segments.length} חיתוכים · ${fmtDur(plan.total)} · ${S.name}${mu ? ' · ' + U.esc(mu.title) : ''}${total < st.target * 0.6 ? ` <span class="badge warn">מעט חומר מצולם — חלק מהקטעים יואטו</span>` : ''}</p>${plan.hookText || Object.values(plan.hints || {}).some(Boolean) ? `<p class="small muted" style="margin:0 0 10px">העורך קלט מהתיאור:${plan.hookText ? ` הוק → "${U.esc(plan.hookText)}"` : ''}${plan.hints?.product ? ' · חשיפה ארוכה' : ''}${plan.hints?.quick ? ' · קצב מהיר' : ''}${plan.hints?.closeup ? ' · דגש על קלוז-אפ' : ''}${plan.hints?.action ? ' · דגש על תהליך' : ''}${plan.hints?.asmr ? ' · שמור צליל מקורי' : ''}</p>` : ''}` : ''}
+            ${plan && plan.segments.length ? `<p class="small" style="margin:0 0 10px">${plan.segments.length} חיתוכים · ${fmtDur(plan.total)} · ${S.name}${mu ? ' · ' + U.esc(mu.title) : ''}${total < st.target * 0.6 ? ` <span class="badge warn">מעט חומר מצולם — חלק מהקטעים יואטו</span>` : ''}</p>${plan.hookText || Object.values(plan.hints || {}).some(Boolean) ? `<p class="small muted" style="margin:0 0 10px">העורך קלט מהתיאור:${plan.hookText ? ` הוק → "${U.esc(plan.hookText)}"` : ''}${plan.hints?.product ? ' · חשיפה ארוכה' : ''}${plan.hints?.quick ? ' · קצב מהיר' : ''}${plan.hints?.closeup ? ' · דגש על קלוז-אפ' : ''}${plan.hints?.action ? ' · דגש על תהליך' : ''}${plan.hints?.asmr ? ' · שמור צליל מקורי' : ''}${plan.hints?.slow ? ' · יותר הילוך איטי' : ''}${plan.hints?.fast ? ' · תהליכים מואצים' : ''}</p>` : ''}
+              ${plan.summary && plan.summary.shortBy > 0.5 ? `<div class="notice section" style="margin:0 0 10px">${A.icon('alert')}<div>אין מספיק צילומים טובים ל־${st.target} שניות — במקום למלא בקטעים חוזרים או מתים, הסרטון ייצא <b>${fmtDur(plan.total)}</b>. כדי להגיע לאורך המלא הוסיפי עוד ${Math.ceil(plan.summary.shortBy)} שניות של צילום, או בחרי אורך קצר יותר.</div></div>` : ''}
+              ${plan.summary && plan.summary.analyzed ? `<details class="vt-plan"><summary class="small"><b>מה העורכת החליטה</b>${plan.summary.slow ? ` · ${plan.summary.slow} בהילוך איטי` : ''}${plan.summary.fast ? ` · ${plan.summary.fast} מואצים` : ''}</summary>
+                <ol class="small">${plan.segments.map(s => `<li><b>${s.role === 'hook' ? 'פתיחה' : s.role === 'reveal' ? 'סיום' : 'קליף ' + (s.clip + 1)}</b> · ${U.round(s.start, 1)}–${U.round(s.start + s.dur * s.speed, 1)} ש׳ בקליף ${s.clip + 1} · ${U.round(s.dur, 1)} ש׳ בסרטון${Math.abs(s.speed - 1) > 0.04 ? ` · <span class="vt-sp ${s.speed < 1 ? 'slow' : 'fast'}">×${U.round(s.speed, 2)}</span>` : ''}${s.why ? ` · <span class="muted">${U.esc(s.why)}</span>` : ''}</li>`).join('')}</ol></details>` : ''}` : ''}
             <button class="btn" style="width:100%;min-height:52px;font-size:1.05rem" data-act="render" ${st.clips.length ? '' : 'disabled'}>${A.icon('play')}עריכת הסרטון</button>
             ${!st.clips.length ? '<p class="small muted" style="margin:8px 0 0;text-align:center">הוסיפי קליפים כדי להתחיל</p>' : ''}
           </div>
@@ -112,7 +132,7 @@
           if (A.analyzeClips) {
             st.analyzing = true; A.refresh();
             try {
-              const analyses = await A.analyzeClips(added, p => { st.analyzeProgress = p; const el = document.querySelector('[data-analyzer]'); if (el) el.textContent = `מנתחת ${Math.round(p * 100)}%`; });
+              const analyses = await A.analyzeClips(added, p => { st.analyzeProgress = p; const el = document.querySelector('[data-analyzer]'); if (el) el.textContent = `צופה בקליפים ומזהה מה לחתוך, מה להאיץ ומה בהילוך איטי… ${Math.round(p * 100)}%`; });
               added.forEach((c, k) => { if (analyses[k]) c.analysis = analyses[k]; });
               // סימון hero חכם: אם המשתמשת לא סימנה, בוחר/ת לפי "מוצר מוגמר יציב ובהיר"
               if (!st.clips.find(c => c.hero) || st.clips.length === added.length) {
@@ -131,6 +151,7 @@
         const k = f.dataset.f; if (!k) return;
         if (k === 'target') st.target = Math.max(5, Math.min(180, U.num(f.value) || 30));
         else if (k === 'keepOriginal') st.keepOriginal = f.checked;
+        else if (k === 'autoSpeed') st.autoSpeed = f.checked;
         else if (k === 'hq') st.hq = f.value === '1';
         else st[k] = f.value;
         stopPreview(); A.refresh();
@@ -176,7 +197,7 @@
     // חייבים ליצור ולהפעיל את האודיו ברגע הלחיצה — אחרת באייפון הסרטון יוצא שקט
     let audioContext = null; try { audioContext = new (root.AudioContext || root.webkitAudioContext)(); audioContext.resume(); } catch (e) { }
     const mu = musicFor(), S = A.VIDEO_STYLES[st.style];
-    const plan = A.planEdit(st.clips, { target: st.target, style: st.style, bpm: mu && mu.bpm, description: st.description });
+    const plan = A.planEdit(st.clips, planOpts(mu));
     signal = { cancelled: false };
     A.modal({
       title: 'עורכת את הסרטון…', size: 'narrow',

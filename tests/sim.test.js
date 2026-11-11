@@ -2,7 +2,7 @@
 const fs = require('fs'), path = require('path'), vm = require('vm'), assert = require('assert');
 const ctx = { console, Intl, TextEncoder, TextDecoder, btoa: s => Buffer.from(s, 'binary').toString('base64'), atob: s => Buffer.from(s, 'base64').toString('binary') };
 ctx.window = ctx; vm.createContext(ctx);
-['js/core.js', 'js/seed.js', 'js/library.js', 'js/sync.js', 'js/pages/production.js', 'tests/demo-fixture.js', 'js/video-plan.js', 'js/music.js', 'js/receipts.js'].forEach(f => vm.runInContext(fs.readFileSync(path.join(__dirname, '..', f), 'utf8'), ctx, { filename: f }));
+['js/core.js', 'js/seed.js', 'js/library.js', 'js/sync.js', 'js/pages/production.js', 'tests/demo-fixture.js', 'js/video-plan.js', 'js/video-analyze.js', 'js/music.js', 'js/receipts.js'].forEach(f => vm.runInContext(fs.readFileSync(path.join(__dirname, '..', f), 'utf8'), ctx, { filename: f }));
 const A = ctx.App, U = A.util, C = A.calc;
 let n = 0; const t = (name, fn) => { fn(); n++; console.log('✓', name); };
 const near = (a, b, eps = 0.01, msg) => assert.ok(Math.abs(a - b) <= eps, `${msg || ''} expected ${b}, got ${a}`);
@@ -376,11 +376,11 @@ t('מנוע עריכת הסרטונים: אורך מדויק, גבולות קל�
   const clips = [{ duration: 12 }, { duration: 7.5 }, { duration: 20 }, { duration: 4 }, { duration: 9, hero: true }, { duration: 15 }];
   for (const style of Object.keys(A.VIDEO_STYLES)) for (const target of [10, 15, 30, 45, 60]) for (const bpm of [null, 104, 152]) {
     const p = A.planEdit(clips, { target, style, bpm });
-    near(p.total, target, 0.06, `${style} ${target}s bpm=${bpm} → ${p.total}`);
+    near(p.total, target, 0.06, `${style} ${target}s bpm=${bpm} → ${p.total}`); assert.strictEqual(p.summary.shortBy, 0);
     p.segments.forEach(s => {
       const c = clips[s.clip];
       assert.ok(s.start >= 0 && s.start + s.dur * s.speed <= c.duration + 0.01, `${style}/${target}: קטע מחוץ לקליפ`);
-      assert.ok(s.dur >= 0.3, 'קטע קצר מדי'); assert.ok(s.speed >= 0.5 && s.speed <= 2, 'מהירות סבירה');
+      assert.ok(s.dur >= 0.3, 'קטע קצר מדי'); assert.ok(s.speed >= 0.5 && s.speed <= 3, 'מהירות סבירה');
     });
     assert.strictEqual(p.segments[p.segments.length - 1].clip, 4, 'מסתיים במוצר המוגמר');
     if (target >= 30) { const used = new Set(p.segments.map(s => s.clip)); assert.strictEqual(used.size, clips.length, `${style}/${target}: כל הקליפים בשימוש`); }
@@ -389,10 +389,54 @@ t('מנוע עריכת הסרטונים: אורך מדויק, גבולות קל�
   assert.ok(rec.segments.some(s => s.caption === 'שלב 1'), 'כיתובי שלבים');
   assert.strictEqual(rec.segments[0].role, 'hook', 'נפתח בהצצה לתוצאה');
   // קליפ בודד וקצר — לא קורס
-  const one = A.planEdit([{ duration: 3 }], { target: 15, style: 'rhythm' }); near(one.total, 15, 0.06);
+  const one = A.planEdit([{ duration: 3 }], { target: 15, style: 'rhythm' }); near(one.total + one.summary.shortBy, 15, 0.06); assert.ok(one.endCard <= 3.6, 'לא ממלאים במסך סיום ארוך');
   assert.strictEqual(A.planEdit([], { target: 15, style: 'calm' }).segments.length, 0);
   assert.strictEqual(A.MUSIC.length, 10); assert.ok(A.MUSIC.every(m => m.src.includes('opengameart.org')));
 });
+t('עריכת סרטונים: מזהה מה לחתוך, מה להאיץ ומה בהילוך איטי', () => {
+  // קליף תהליך של 14 שניות: הקשה בהתחלה, זמן מת, ערבוב ארוך ואחיד, רגע שיא, פעולה, קטע מטושטש, ושוב פעולה
+  const fr = [], dt = 0.25;
+  for (let t = 0.05; t < 13.97; t += dt) {
+    let motion = 0.006, sharp = 0.12, cam = 0.2;
+    if (t >= 2.5 && t < 8.5) motion = 0.05 + (Math.round(t * 4) % 2 ? 0.004 : -0.004);   // ערבוב — אחיד
+    else if (t >= 9.7 && t < 9.9) motion = 0.22;                                            // שיא: חיתוך לתוך הסופגניה (דגימה אחת)
+    else if (t >= 9.4 && t < 10.3) motion = 0.07;
+    else if (t >= 10.3 && t < 11.5) motion = (Math.round(t * 4) % 2 ? 0.04 : 0.085);        // פעולה לא אחידה
+    else if (t >= 11.5 && t < 12.5) { motion = 0.05; sharp = 0.01; }                       // מטושטש
+    else if (t >= 12.5) motion = (Math.round(t * 4) % 2 ? 0.045 : 0.08);
+    fr.push({ t: Math.round(t * 100) / 100, brightness: 0.55, sharpness: sharp, color: 0.3, motion, raw: motion, cam, camX: 0, camY: 0 });
+  }
+  const an = A.finishAnalysis(fr, 14), kinds = new Set(an.moments.map(m => m.kind));
+  ['bad', 'idle', 'steady', 'peak', 'action'].forEach(k => assert.ok(kinds.has(k), `זוהה ${k}: ${[...kinds]}`));
+  const pk = an.moments.find(m => m.kind === 'peak'); assert.ok(pk.peak >= 9.6 && pk.peak <= 9.9 && pk.speed <= 0.65, 'רגע השיא במקום ובהילוך איטי');
+  const st = an.moments.find(m => m.kind === 'steady'); assert.ok(st.a <= 3 && st.b >= 8 && st.speed >= 1.8, 'הערבוב מזוהה כתהליך למאיץ');
+  assert.ok(an.moments.some(m => m.kind === 'bad' && m.a <= 11.7 && m.b >= 12.3), 'הקטע המטושטש נחתך');
+  assert.ok(an.moments.some(m => m.kind === 'idle' && m.a < 1 && m.b >= 2.3), 'הזמן המת בהתחלה מזוהה');
+  // קליף מוצר מוגמר: יציב, חד, בהיר
+  const hf = []; for (let t = 0.05; t < 5.9; t += dt) hf.push({ t: Math.round(t * 100) / 100, brightness: 0.62, sharpness: 0.14, color: 0.35, motion: 0.004, raw: 0.004, cam: 0.1, camX: 0, camY: 0 });
+  const clips = [{ duration: 14, analysis: an }, { duration: 6, hero: true, analysis: A.finishAnalysis(hf, 6) }];
+  for (const style of Object.keys(A.VIDEO_STYLES)) for (const target of [15, 30]) {
+    const p = A.planEdit(clips, { target, style });
+    near(p.total + p.summary.shortBy, target, 0.06, `${style} ${target}`); assert.ok(p.endCard <= 3.6, 'מסך סיום לא מנופח');
+    const inBad = s => an.moments.some(m => (m.kind === 'bad') && s.start + s.dur * s.speed / 2 > m.a && s.start + s.dur * s.speed / 2 < m.b);
+    p.segments.filter(s => s.clip === 0).forEach(s => assert.ok(!inBad(s), `${style}/${target}: קטע באמצע אזור פסול ${JSON.stringify(s)}`));
+    const covers = (s, t) => s.start <= t && s.start + s.dur * s.speed >= t;
+    assert.ok(p.segments.some(s => s.clip === 0 && s.speed <= 0.85 && covers(s, pk.peak)), `${style}/${target}: רגע השיא בהילוך איטי`);
+    assert.ok(p.segments.some(s => s.clip === 0 && s.speed >= 1.5 && s.start >= st.a - 0.01 && s.start + s.dur * s.speed <= st.b + 0.5), `${style}/${target}: הערבוב מואץ`);
+    assert.ok(!p.segments.some(s => s.clip === 0 && s.start + s.dur * s.speed < 2.4 && s.start > 0.2), `${style}/${target}: לא משתמשים בזמן המת`);
+    assert.strictEqual(p.segments[p.segments.length - 1].clip, 1, 'מסיימים במוצר המוגמר');
+    assert.ok(p.summary.slow >= 1 && p.summary.fast >= 1);
+  }
+  // בלי שינויי מהירות אוטומטיים — אין הילוך איטי/מואץ לפי תוכן
+  const plain = A.planEdit(clips, { target: 15, style: 'calm', autoSpeed: false });
+  assert.ok(plain.segments[0].kind !== 'peak' && plain.summary.fast === 0 && !plain.segments.some(s => /הילוך איטי|מואץ/.test(s.why || '')), 'בלי שינויי מהירות לפי תוכן כשהאפשרות כבויה');
+  // בלי ניתוח (דפדפן שלא מאפשר לקרוא פריימים) — העריכה עובדת כמו קודם
+  near(A.planEdit([{ duration: 14 }, { duration: 6, hero: true }], { target: 20, style: 'rhythm' }).total, 20, 0.06);
+  // חיתוכים לא חוזרים על אותו קטע כשיש מספיק חומר
+  const p15 = A.planEdit(clips, { target: 15, style: 'calm' }), b15 = p15.segments.filter(s => s.role === 'body' && s.clip === 0).sort((x, y) => x.start - y.start);
+  for (let k = 1; k < b15.length; k++) assert.ok(b15[k].start >= b15[k - 1].start + b15[k - 1].dur * b15[k - 1].speed - 0.05, 'חיתוכים חופפים: ' + JSON.stringify(b15));
+});
+
 t('קבלות: פענוח, התאמה למצרכים, מחיר ממוצע, מלאי וביטול', () => {
   const st = A.normalize(null); const save = A.state; A.state = st; A.seed.catalog(st);
   const text = `רמי לוי שיווק השקמה

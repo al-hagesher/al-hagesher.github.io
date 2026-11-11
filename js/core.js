@@ -130,8 +130,8 @@
     leadDays: 2, maxDaysAhead: 30, capacity: 0, slotMinutes: 30, minOrder: 0, blocked: [],
     days: { 0: { on: false, from: '09:00', to: '18:00' }, 1: { on: false, from: '09:00', to: '18:00' }, 2: { on: false, from: '09:00', to: '18:00' }, 3: { on: false, from: '09:00', to: '18:00' }, 4: { on: true, from: '10:00', to: '19:00' }, 5: { on: true, from: '08:00', to: '13:00' }, 6: { on: false, from: '20:00', to: '22:00' } },
     delivery: { on: false, fee: 20, freeAbove: 0, note: '' },
-    pay: { mode: 'deposit', pct: 50, bit: '', paybox: '', hours: 24 },
-    products: {}, customProducts: []
+    pay: { mode: 'deposit', pct: 50, bit: '', bitLink: '', paybox: '', hours: 24 },
+    products: {}, customProducts: [], order: [], catOrder: []
   });
 
   /* ---------- מצב ברירת מחדל ---------- */
@@ -197,6 +197,8 @@
     if (!Array.isArray(s.form.blocked)) s.form.blocked = [];
     if (!s.form.products || typeof s.form.products !== 'object') s.form.products = {};
     if (!Array.isArray(s.form.customProducts)) s.form.customProducts = [];
+    if (!Array.isArray(s.form.order)) s.form.order = [];
+    if (!Array.isArray(s.form.catOrder)) s.form.catOrder = [];
     return s;
   };
   A.load = async () => {

@@ -459,6 +459,66 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: non
 .qr { background: #fff; padding: 12px; border-radius: 12px; border: 1px solid var(--line); display: inline-block; }
 .qr img, .qr canvas { display: block; width: 180px; height: 180px; }
 
+/* ---------- בונה טופס ההזמנות ---------- */
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.fp-top { display: grid; grid-template-columns: 1fr auto; gap: 22px; align-items: start; }
+.fp-qr { text-align: center; }
+.fp-qr .qr img, .fp-qr .qr canvas { width: 150px; height: 150px; }
+.fp-ready { margin-top: 16px; padding: 12px 14px; border-radius: 12px; background: var(--sand-2); border: 1px solid var(--line); font-size: .9rem; }
+.fp-ready.ok { display: flex; align-items: center; gap: 8px; background: var(--ok-bg); color: var(--ok); border-color: transparent; }
+.fp-ready.ok .ic { width: 18px; height: 18px; }
+.fp-ready ul { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; }
+.fp-ready li { display: flex; gap: 10px; align-items: baseline; justify-content: space-between; padding-inline-start: 16px; position: relative; }
+.fp-ready li::before { content: ''; position: absolute; inset-inline-start: 0; top: .5em; width: 8px; height: 8px; border-radius: 50%; background: var(--info); }
+.fp-ready li.bad::before { background: var(--bad); } .fp-ready li.warn::before { background: var(--warn); }
+.fp-ready li.bad span { font-weight: 600; }
+.fp-link { border: 0; background: none; padding: 0; color: var(--caramel); font: inherit; font-weight: 700; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; white-space: nowrap; }
+.fp-tabs { margin-bottom: 14px; }
+.fp-tools { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.fp-tools input[type=search] { flex: 1; min-width: 160px; }
+.fp-bulk { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 12px; padding: 8px 12px; border-radius: 12px; background: var(--brown); color: var(--cream); position: sticky; bottom: 14px; z-index: 4; box-shadow: 0 6px 20px rgba(59, 45, 30, .3); }
+.fp-bulk b { margin-inline-end: 4px; }
+.fp-bulk .btn.ghost { color: var(--cream); border-color: rgba(255, 255, 255, .35); }
+.fp-bulk.none { background: none; color: inherit; padding: 0; position: static; box-shadow: none; }
+.fp-cat { display: flex; align-items: center; gap: 8px; margin: 18px 0 6px; padding-bottom: 6px; border-bottom: 2px solid var(--line-2); font-family: var(--display); font-size: 1.02rem; color: var(--brown); }
+.fp-cat .fp-move { margin-inline-start: auto; flex-direction: row; }
+.fp-row { display: flex; align-items: center; gap: 12px; padding: 9px 4px; border-bottom: 1px solid var(--line); }
+.fp-row.off .fp-thumb, .fp-row.off .fp-main { opacity: .5; }
+.fp-row > input[type=checkbox] { flex: none; width: 18px; height: 18px; }
+.fp-thumb { flex: none; width: 52px; height: 52px; border-radius: 10px; overflow: hidden; background: var(--sand-2); display: grid; place-items: center; color: var(--muted); }
+.fp-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.fp-thumb .ic { width: 20px; height: 20px; }
+.fp-main { flex: 1; min-width: 0; border: 0; background: none; padding: 4px 0; text-align: start; font: inherit; color: inherit; cursor: pointer; display: grid; gap: 2px; border-radius: 8px; }
+.fp-main:hover .fp-name { color: var(--caramel); }
+.fp-name { font-weight: 700; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.fp-sub { font-size: .84rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fp-sub b { color: var(--ink); } .fp-sub .bad { color: var(--bad); font-weight: 700; }
+.fp-move { display: flex; flex-direction: column; gap: 2px; flex: none; }
+.fp-move button { border: 1px solid var(--line); background: var(--paper); color: var(--muted); border-radius: 6px; width: 30px; height: 22px; font-size: .62rem; line-height: 1; cursor: pointer; padding: 0; }
+.fp-move button:hover { color: var(--brown); border-color: var(--brown-3); }
+.kz { display: inline-block; padding: 1px 9px; border-radius: 99px; font-size: .74rem; font-weight: 800; letter-spacing: .01em; }
+.kz.parve { background: var(--ok-bg); color: var(--ok); } .kz.dairy { background: var(--info-bg); color: var(--info); }
+.kz-seg button.on.parve { background: var(--ok); color: #fff; } .kz-seg button.on.dairy { background: var(--info); color: #fff; }
+.switch { position: relative; display: inline-flex; flex: none; width: 44px; height: 26px; cursor: pointer; }
+.switch input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; z-index: 1; }
+.switch i { flex: 1; border-radius: 99px; background: var(--line-2); transition: background .15s; position: relative; }
+.switch i::after { content: ''; position: absolute; top: 3px; inset-inline-start: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, .25); transition: transform .15s; }
+.switch input:checked + i { background: var(--ok); }
+.switch input:checked + i::after { transform: translateX(-18px); }
+.switch input:focus-visible + i { outline: 2px solid var(--caramel); outline-offset: 2px; }
+.switch-row { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; }
+.fp-img { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.fp-img img { width: 84px; height: 84px; object-fit: cover; border-radius: 12px; border: 1px solid var(--line); }
+.fp-phone { width: min(100%, 390px); margin: 0 auto; border: 9px solid var(--brown); border-radius: 34px; overflow: hidden; background: #fff; box-shadow: 0 10px 30px rgba(59, 45, 30, .22); }
+.fp-phone iframe { display: block; width: 100%; height: min(680px, calc(100vh - 290px)); min-height: 380px; border: 0; }
+@media (max-width: 700px) { .fp-phone { border-width: 0; border-radius: 14px; box-shadow: 0 0 0 1px var(--line); } .fp-phone iframe { height: calc(100dvh - 250px); min-height: 340px; } }
+@media (max-width: 860px) { .fp-bulk { bottom: calc(84px + env(safe-area-inset-bottom, 0px)); } }
+@media (max-width: 700px) {
+  .fp-top { grid-template-columns: 1fr; }
+  .fp-row { gap: 9px; } .fp-thumb { width: 44px; height: 44px; }
+  .fp-sub { white-space: normal; }
+}
+
 /* ---------- מסכים צרים ---------- */
 @media (max-width: 1100px) {
   .g4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }

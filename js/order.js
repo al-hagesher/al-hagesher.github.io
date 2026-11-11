@@ -61,6 +61,8 @@
     return out;
   }
   const count = () => lines().reduce((s, l) => s + l.q, 0);
+  const minWord = () => String(cfg.minItemsWord || '').trim().slice(0, 20) || 'יחידות';
+  const missing = n => { const left = +cfg.minItems - n; return left === 1 ? 'חסרה עוד אחת' : `חסרות עוד ${left}`; };
   const subtotal = () => lines().reduce((s, l) => s + l.q * l.p.price, 0);
   const fee = () => st.method === 'delivery' && cfg.delivery.on ? (cfg.delivery.freeAbove > 0 && subtotal() >= cfg.delivery.freeAbove ? 0 : (+cfg.delivery.fee || 0)) : 0;
   // בדיקת קופון מיידית בדפדפן; השרת בודק שוב בשליחה וקובע את הסכום הסופי
@@ -126,6 +128,10 @@
       try { cfg = await rpc('form_get', { p_slug: slug }); } catch (e) { cfg = undefined; }
       if (cfg === undefined) return emptyPage('<div class="empty">אין חיבור כרגע.<br><br><button class="btn ghost" data-reload>לנסות שוב</button></div>');
       if (!cfg) return emptyPage('<div class="empty">הטופס לא נמצא.</div>');
+      // קישור ישן של טופס שהוחלף — מעבירים לטופס הנוכחי (עם קוד ההנחה, אם היה)
+      if (cfg.moved && /^[a-z0-9]{6,20}$/.test(cfg.moved) && cfg.moved !== slug) {
+        params.set('f', cfg.moved); location.replace(location.pathname + '?' + params.toString() + location.hash); return;
+      }
     }
     cfg.products = (cfg.products || []).map(p => ({ ...p, options: Array.isArray(p.options) ? p.options.filter(Boolean) : [], price: +p.price || 0 }));
     cfg.delivery = cfg.delivery || {}; cfg.days = cfg.days || {};
@@ -197,6 +203,7 @@
       onDays.length === 7 ? 'כל יום' : onDays.length ? 'ימי ' + onDays.map(i => DAYS[i]).join(', ') : '',
       cfg.leadDays > 0 ? (cfg.leadDays === 1 ? 'להזמין יום מראש' : `להזמין ${cfg.leadDays} ימים מראש`) : '',
       +cfg.minOrder ? `מינימום ${money(+cfg.minOrder)}` : '',
+      +cfg.minItems > 1 ? `מינימום ${+cfg.minItems} ${minWord()}` : '',
       dl.on ? (+dl.freeAbove ? `משלוח חינם מעל ${money(+dl.freeAbove)}` : 'יש משלוחים') : 'איסוף עצמי'
     ].filter(Boolean);
     const fld = (id, k, label, extra) => `<label class="fld"><span>${label}</span><input id="${id}" data-f="${k}" value="${esc(st[k])}" ${extra || ''}><small class="ferr" id="e_${id}"></small></label>`;
@@ -271,6 +278,7 @@
   function nextStep() {
     const n = count();
     if (!n) return { label: 'בחירת מוצרים', go: '#s-menu' };
+    if (+cfg.minItems > 1 && n < +cfg.minItems) return { label: `${missing(n)} למינימום`, go: '#s-menu', msg: `ההזמנה המינימלית היא ${+cfg.minItems} ${minWord()} — ${missing(n)}` };
     if (+cfg.minOrder && subtotal() < +cfg.minOrder) return { label: `עוד ${money(cfg.minOrder - subtotal())} למינימום`, go: '#s-menu', msg: `סכום ההזמנה המינימלי הוא ${money(+cfg.minOrder)}` };
     if (!st.date) return { label: 'לבחירת תאריך', go: '#s-when', pulse: '#dates' };
     if (cfg.slotMinutes && slots(st.date).length && !st.time) return { label: 'לבחירת שעה', go: '#times', pulse: '#times' };
@@ -292,8 +300,10 @@
   function drawCart() {
     const body = $('#cartBody'); if (!body) return; const ls = lines(), sub = subtotal(), dl = cfg.delivery;
     if (!ls.length) { $('#cartDlg').close(); return; }
-    const prog = (target, text) => `<div class="prog">${text}<div><i style="width:${Math.min(100, Math.round(sub / target * 100))}%"></i></div></div>`;
+    const prog = (target, text, have = sub) => `<div class="prog">${text}<div><i style="width:${Math.min(100, Math.round(have / target * 100))}%"></i></div></div>`;
+    const n = count(), mi = +cfg.minItems;
     body.innerHTML = `${ls.map(l => `<div class="cl" data-id="${esc(l.p.id)}"><div class="cn"><b>${esc(l.p.name)}</b>${l.opt ? `<span>${esc(l.opt)}</span>` : ''}<small>${money(l.p.price)}</small></div>${stepper(l.p, l.opt)}<div class="cpr">${money(l.q * l.p.price)}</div></div>`).join('')}
+      ${mi > 1 && n < mi ? prog(mi, `${missing(n)} כדי להגיע למינימום של ${mi} ${minWord()}`, n) : ''}
       ${+cfg.minOrder && sub < +cfg.minOrder ? prog(+cfg.minOrder, `עוד ${money(cfg.minOrder - sub)} להזמנה המינימלית (${money(+cfg.minOrder)})`) : ''}
       ${dl.on && st.method === 'delivery' && +dl.freeAbove && +dl.fee && sub < +dl.freeAbove ? prog(+dl.freeAbove, `עוד ${money(dl.freeAbove - sub)} למשלוח חינם`) : ''}
       ${totalsHtml()}`;

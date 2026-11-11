@@ -185,6 +185,26 @@ t('סנכרון קופונים: איחוד בפעם הראשונה, ומיזוג
   assert.ok(A.syncEq(A.syncMerge(m2, JSON.parse(JSON.stringify(m2)), JSON.parse(JSON.stringify(m2))), m2), 'בלי שינוי — זהה');
 });
 
+t('סנכרון טופס: שני מכשירים עם טפסים שונים — הקישור והמפתח יחד, והטופס הישן נשמר', () => {
+  const form = (slug, key, extra) => Object.assign(A.normalize(null).form, { enabled: true, slug, key }, extra);
+  const base = A.normalize(null); base.couponsMerged = true;
+  const local = JSON.parse(JSON.stringify(base)); local.form = form('aaaaaaaaaa', 'KEY-A'.padEnd(40, 'a'));
+  const remote = JSON.parse(JSON.stringify(base)); remote.form = form('bbbbbbbbbb', 'KEY-B'.padEnd(40, 'b'), { title: 'טופס מהענן' });
+  const m = A.syncMerge(base, local, remote);
+  const pair = [local.form, remote.form].find(f => f.slug === m.form.slug);
+  assert.ok(pair, 'הקישור הוא של אחד הטפסים');
+  assert.strictEqual(m.form.key, pair.key, 'המפתח שייך לאותו קישור');
+  assert.strictEqual(m.form.oldForms.length, 1, 'הטופס השני נשמר כטופס ישן');
+  assert.notStrictEqual(m.form.oldForms[0].slug, m.form.slug);
+  assert.strictEqual(m.form.oldForms[0].key, [local.form, remote.form].find(f => f.slug === m.form.oldForms[0].slug).key);
+  // מיזוג חוזר בלי שינוי — יציב, והטופס הישן לא נעלם
+  const again = A.syncMerge(m, JSON.parse(JSON.stringify(m)), JSON.parse(JSON.stringify(m)));
+  assert.ok(A.syncEq(again, m), 'בלי שינוי — זהה');
+  // טופס קיים ישן בלי מינימום מקבל 4 סופגניות; טופס שהוגדר בו 0 נשאר 0
+  assert.strictEqual(A.normalize({ form: { enabled: true, slug: 'x' } }).form.minItems, 4);
+  assert.strictEqual(A.normalize({ form: { enabled: true, slug: 'x', minItems: 0 } }).form.minItems, 0);
+});
+
 t('קופונים: שימושים נספרים מההזמנות, חד־פעמי לכל לקוחה והזמנה ראשונה', () => {
   const save = A.state; const st = A.normalize(null); A.state = st;
   st.coupons.push({ id: 'k1', code: 'ONCE10', type: 'percent', value: 10, active: true, oncePerCustomer: true },

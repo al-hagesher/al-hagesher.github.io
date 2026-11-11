@@ -127,7 +127,7 @@
     enabled: false, slug: '', key: '', open: true,
     title: 'הזמנה מעל הגשר', intro: 'מאפים ומתוקים בעבודת יד, באהבה. בחרי מה תרצי ומתי — ואחזור אלייך לאישור.',
     closedMsg: 'ההזמנות סגורות כרגע. נפתח בקרוב!', pickupAddress: '', payInfo: 'תשלום בביט / פייבוקס / מזומן באיסוף', terms: '',
-    leadDays: 2, maxDaysAhead: 30, capacity: 0, slotMinutes: 30, minOrder: 0, blocked: [],
+    leadDays: 2, maxDaysAhead: 30, capacity: 0, slotMinutes: 30, minOrder: 0, minItems: 0, minItemsWord: '', blocked: [], oldForms: [],
     days: { 0: { on: false, from: '09:00', to: '18:00' }, 1: { on: false, from: '09:00', to: '18:00' }, 2: { on: false, from: '09:00', to: '18:00' }, 3: { on: false, from: '09:00', to: '18:00' }, 4: { on: true, from: '10:00', to: '19:00' }, 5: { on: true, from: '08:00', to: '13:00' }, 6: { on: false, from: '20:00', to: '22:00' } },
     delivery: { on: false, fee: 20, freeAbove: 0, note: '' },
     pay: { mode: 'deposit', pct: 50, bit: '', bitLink: '', paybox: '', hours: 24 },
@@ -190,7 +190,11 @@
     ['ingredients', 'recipes', 'orders', 'expenses', 'recurring', 'coupons'].forEach(k => { if (!Array.isArray(s[k])) s[k] = []; });
     if (!s.customers || typeof s.customers !== 'object') s.customers = {};
     const fd = A.formDefaults();
+    // מינימום כמות הוא שדה חדש: בטופס קיים שלא הוגדר בו — 4 סופגניות (כפי שבעלת העסק ביקשה), וניתן לשינוי במסך הטופס
+    const newMin = s.form && s.form.enabled && s.form.minItems === undefined;
     s.form = Object.assign(fd, s.form || {});
+    if (newMin) { s.form.minItems = 4; s.form.minItemsWord = 'סופגניות'; }
+    if (!Array.isArray(s.form.oldForms)) s.form.oldForms = [];
     s.form.days = Object.assign(fd.days, (s.form && s.form.days) || {});
     s.form.delivery = Object.assign(A.formDefaults().delivery, s.form.delivery || {});
     s.form.pay = Object.assign(A.formDefaults().pay, s.form.pay || {});

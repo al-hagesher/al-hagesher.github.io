@@ -79,7 +79,8 @@
     return {
       v: 2, bizName: s.businessName, phone: U.phoneIntl(s.phone), open: !!f.open, closedMsg: f.closedMsg, title: f.title, intro: f.intro,
       pickupAddress: f.pickupAddress, payInfo: f.payInfo, terms: f.terms, cancellationPolicy: s.cancellationPolicy || '', leadDays: +f.leadDays || 0, maxDaysAhead: +f.maxDaysAhead || 30,
-      capacity: +f.capacity || 0, slotMinutes: +f.slotMinutes || 0, minOrder: +f.minOrder || 0, blocked: f.blocked.filter(d => d >= t),
+      capacity: +f.capacity || 0, slotMinutes: +f.slotMinutes || 0, minOrder: +f.minOrder || 0,
+      minItems: Math.max(0, Math.round(+f.minItems || 0)), minItemsWord: String(f.minItemsWord || '').trim().slice(0, 20), blocked: f.blocked.filter(d => d >= t),
       pay: { mode: f.pay.mode, pct: +f.pay.pct || 50, bit: f.pay.bit || s.phone || '', bitLink: A.safeUrl(f.pay.bitLink), paybox: A.safeUrl(f.pay.paybox), hours: +f.pay.hours || 24 },
       days: f.days, delivery: { on: !!f.delivery.on, fee: +f.delivery.fee || 0, freeAbove: +f.delivery.freeAbove || 0, note: f.delivery.note || '' },
       products, coupons, load: F.load()
@@ -98,8 +99,44 @@
       lastHash = h; try { localStorage.setItem('al-hagesher-form-hash', h); } catch (e) { }
       F.pubStatus = 'ok'; F.pubError = ''; F.lastPub = new Date();
     } catch (e) { console.warn(e); F.pubStatus = 'error'; F.pubError = e.message; }
-    F.render(); return F.pubStatus === 'ok';
+    F.render();
+    if (F.pubStatus === 'ok') publishMoved();
+    return F.pubStatus === 'ok';
   };
+
+  /* ---------- טפסים ישנים (קישור שהוחלף) ----------
+     אם פעם נוצר טופס אחר (למשל בטלפון ובמחשב בנפרד), הקישור הישן ממשיך להיות אצל לקוחות.
+     שומרים אותו, ממשיכים לקלוט ממנו הזמנות, ומפרסמים בו "עבר" — כך הדף מעביר את הלקוחה לטופס הנוכחי. */
+  const KNOWN = 'al-hagesher-form-known';
+  const olds = () => { const f = fs(); return (f.oldForms || []).filter(o => o && o.slug && o.key && o.slug !== f.slug); };
+  F.olds = olds;
+  F.rememberForms = () => {
+    const f = fs(); if (!f.slug || !f.key) return;
+    let known = []; try { known = JSON.parse(localStorage.getItem(KNOWN) || '[]') || []; } catch (e) { }
+    let changed = false;
+    known.forEach(k => { if (k && k.slug && k.key && k.slug !== f.slug && !f.oldForms.some(o => o.slug === k.slug)) { f.oldForms.push({ slug: k.slug, key: k.key }); changed = true; } });
+    if (!known.some(k => k && k.slug === f.slug)) known.push({ slug: f.slug, key: f.key });
+    try { localStorage.setItem(KNOWN, JSON.stringify(known.slice(-12))); } catch (e) { }
+    if (changed) A.save();
+  };
+  let movingNow = false;
+  async function publishMoved() {
+    const f = fs(); if (movingNow || !f.slug) return; movingNow = true;
+    try {
+      for (const o of olds()) {
+        const mark = 'al-hagesher-moved-' + o.slug;
+        try { if (localStorage.getItem(mark) === f.slug) continue; } catch (e) { }
+        try {
+          await rpc('form_publish', { p_key: o.key, p_slug: o.slug, p_config: {
+            v: 2, moved: f.slug, open: false, title: f.title, bizName: A.state.settings.businessName, products: [],
+            // דף ישן שעוד לא מכיר את ההעברה יציג את ההודעה הזו
+            closedMsg: `הטופס עבר לקישור חדש: ${F.link()}`
+          } });
+          try { localStorage.setItem(mark, f.slug); } catch (e) { }
+        } catch (e) { console.warn('form moved', o.slug, e.message); }
+      }
+    } finally { movingNow = false; }
+  }
   const hash = s => { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return (h >>> 0).toString(36); };
   const schedulePublish = U.debounce(() => F.publish(), 2500);
   A.saveHooks.push(() => { if (fs().enabled) schedulePublish(); });
@@ -110,7 +147,15 @@
     const f = fs(); if (!f.enabled || !f.key || polling || !navigator.onLine) return 0;
     polling = true;
     try {
-      const rows = await rpc('form_inbox', { p_key: f.key, p_slug: f.slug });
+      F.rememberForms();
+      let n = 0;
+      for (const src of [{ slug: f.slug, key: f.key }, ...olds()]) n += await pollOne(src);
+      return n;
+    } finally { polling = false; }
+  };
+  async function pollOne(src) {
+    try {
+      const rows = await rpc('form_inbox', { p_key: src.key, p_slug: src.slug });
       if (!rows.length) return 0;
       const added = [], claims = [];
       rows.forEach(row => {
@@ -141,13 +186,12 @@
         A.state.orders.push(o); added.push(o);
       });
       if (added.length || claims.length) { await A.saveNow(); }
-      await rpc('form_ack', { p_key: f.key, p_slug: f.slug, p_ids: rows.map(r => r.id), p_before: rows[0].fetched_at });
+      await rpc('form_ack', { p_key: src.key, p_slug: src.slug, p_ids: rows.map(r => r.id), p_before: rows[0].fetched_at });
       if (added.length) notify(added);
       if (claims.length) notify(claims, true);
       return added.length;
-    } catch (e) { console.warn('form poll', e); return 0; }
-    finally { polling = false; }
-  };
+    } catch (e) { console.warn('form poll', src.slug, e); return 0; }
+  }
   function notify(orders, claim) {
     const o = orders[0];
     const msg = claim ? `${o.customerName} דיווחה ששילמה ב${o.payClaim.method || 'העברה'} — בדקי ואשרי את ההזמנה`
@@ -290,6 +334,8 @@
           <label class="field"><span>דמי משלוח (₪)</span><input type="number" min="0" data-p="delivery.fee" data-num="1" value="${f.delivery.fee}" ${dis}></label>
           <label class="field"><span>משלוח חינם מעל (₪)</span><input type="number" min="0" data-p="delivery.freeAbove" data-num="1" value="${f.delivery.freeAbove}" ${dis}><small>0 = אין</small></label>
           <label class="field"><span>מינימום הזמנה (₪)</span><input type="number" min="0" data-p="minOrder" data-num="1" value="${f.minOrder}"></label>
+          <label class="field"><span>מינימום יחידות בהזמנה</span><input type="number" min="0" max="500" data-p="minItems" data-num="1" value="${+f.minItems || 0}"><small>למשל 4 — הזמנה עם פחות לא תתקבל. 0 = בלי מינימום</small></label>
+          <label class="field"><span>איך לקרוא ליחידות</span>${inp('minItemsWord', f.minItemsWord, 'maxlength="20" placeholder="סופגניות"')}<small>מופיע ללקוחה: "מינימום ${+f.minItems || 4} ${U.esc(f.minItemsWord || 'סופגניות')}"</small></label>
           <label class="field full"><span>אזורי משלוח / הערה</span>${inp('delivery.note', f.delivery.note, `placeholder="למשל: משלוחים בתוך העיר בלבד" ${dis}`)}</label>
         </div></div>
       <div class="card"><div class="card-h"><h3>${A.icon('wallet')}תשלום לאישור ההזמנה</h3></div>

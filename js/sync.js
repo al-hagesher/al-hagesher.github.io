@@ -45,6 +45,16 @@
     const bf = base.form || {}, rf = remote.form || {};
     out.form = mergeMap(bf, local.form, rf);
     out.form.products = mergeMap(bf.products, local.form.products, rf.products);
+    // קישור הטופס והמפתח שלו הולכים תמיד יחד; טופס שהוחלף (שני מכשירים שיצרו כל אחד טופס משלו) נשמר ב־oldForms —
+    // כך ההזמנות שנשלחות לקישור הישן עדיין נקלטות, והקישור הישן מעביר את הלקוחות לטופס הנוכחי
+    const sides = [local.form, rf, bf].filter(x => x && x.slug && x.key);
+    const owner = sides.find(x => x.slug === out.form.slug);
+    if (owner) out.form.key = owner.key; else if (sides[0]) { out.form.slug = sides[0].slug; out.form.key = sides[0].key; }
+    const olds = [], seenSlug = new Set([out.form.slug]);
+    [...sides, local.form, rf, bf].forEach(x => [x, ...((x && x.oldForms) || [])].forEach(o => {
+      if (o && o.slug && o.key && !seenSlug.has(o.slug)) { seenSlug.add(o.slug); olds.push({ slug: o.slug, key: o.key }); }
+    }));
+    out.form.oldForms = olds.slice(0, 12);
     const bw = base.wheel || {}, rw = remote.wheel || {};
     out.wheel = { areas: pick(bw.areas, local.wheel.areas, rw.areas) || local.wheel.areas, entries: mergeList(bw.entries, local.wheel.entries, rw.entries) };
     // מספרי הזמנה כפולים (הזמנות שנוצרו בשני מכשירים בלי חיבור) — מקבלים מספר חדש

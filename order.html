@@ -33,6 +33,12 @@
     .intro { color: var(--muted); margin: 8px auto 0; max-width: 500px; white-space: pre-line; }
     .pills { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-top: 14px; }
     .pill { background: var(--paper); border: 1px solid var(--line); border-radius: 99px; padding: 4px 13px; font-size: .84rem; color: var(--brown-2); font-weight: 600; }
+    .gift { display: flex; gap: 11px; align-items: center; text-align: start; background: var(--ok-bg); color: var(--ok); border: 1px dashed var(--ok); border-radius: 14px; padding: 10px 14px; margin: 14px auto 0; max-width: 500px; font-size: .9rem; line-height: 1.45; }
+    .gift .e { font-size: 1.5rem; flex: none; }
+    .gift b { display: block; font-size: 1rem; }
+    .gift .cptag { background: var(--paper); }
+    .gift.bad { background: var(--paper); color: var(--muted); border-color: var(--line-2); }
+    .gift.bad b { color: var(--bad); font-size: .93rem; }
     .preview-banner { background: var(--brown); color: var(--cream); text-align: center; font-size: .85rem; font-weight: 600; padding: 6px 10px; border-radius: 10px; margin-bottom: 8px; }
     .card { background: var(--paper); border: 1px solid var(--line); border-radius: 16px; }
     .pad { padding: 16px; }
@@ -206,6 +212,6 @@
     <header><img src="assets/logo-brown.png" alt="על הגשר — מאפים, מתוקים ומעבר" width="132" height="119"></header>
     <main id="app"><div class="loader" role="status" aria-label="טוען"></div></main>
   </div>
-  <script src="js/order.js?v=202611111500"></script>
+  <script src="js/order.js?v=202611111800"></script>
 </body>
 </html>

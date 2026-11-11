@@ -360,6 +360,10 @@
         };
         const showDel = () => w.querySelectorAll('[data-del-only]').forEach(x => x.style.display = method === 'delivery' ? '' : 'none');
         showDel();
+        const origCoupon = {
+          raw: (o && o.couponCode) || '', code: String((o && o.couponCode) || '').trim().toUpperCase(), discount: +(o && o.couponDiscount) || 0,
+          subtotal: ((o && o.items) || []).reduce((s, i) => s + (+i.qty || 0) * (+i.unitPrice || 0), 0)
+        };
         const readItems = () => [...items.querySelectorAll('[data-item]')].map(row => {
           const g = k => row.querySelector(`[data-k="${k}"]`).value.trim();
           const name = g('name'), r = A.state.recipes.find(x => x.name === name);
@@ -370,15 +374,23 @@
           const its = readItems();
           its.forEach(i => i.row.querySelector('[data-k=sum]').textContent = U.money(i.qty * i.unitPrice));
           const subtotal = its.reduce((s, i) => s + i.qty * i.unitPrice, 0);
-          let couponDiscount = 0, couponCode = '';
+          let couponDiscount = 0, couponCode = '', couponErr = '';
           const msgEl = w.querySelector('[data-coupon-msg]');
-          const codeInput = (v.couponCode || '').trim();
-          if (codeInput) {
-            const res = C.validateCoupon(codeInput, subtotal, v.date, v.phone);
-            if (res.ok) { couponDiscount = res.discount; couponCode = res.coupon.code; if (msgEl) { msgEl.textContent = `✓ הנחה ${U.money(res.discount)}`; msgEl.style.color = 'var(--ok)'; } }
-            else if (msgEl) { msgEl.textContent = '⚠ ' + res.reason; msgEl.style.color = 'var(--bad)'; }
-          } else if (msgEl) { msgEl.textContent = ''; }
-          d.couponCode = couponCode; d.couponDiscount = couponDiscount;
+          const codeInput = (v.couponCode || '').trim().toUpperCase();
+          const setMsg = (txt, ok) => { if (msgEl) { msgEl.textContent = txt; msgEl.style.color = ok ? 'var(--ok)' : 'var(--bad)'; } };
+          if (codeInput && codeInput === origCoupon.code) {
+            // הקופון שכבר שמור בהזמנה — ההנחה הובטחה ללקוחה, אז לא בודקים אותו מחדש (תוקף / מגבלת שימושים).
+            // רק אם סכום המוצרים השתנה מחשבים את ההנחה מחדש לפי הקופון.
+            const c = C.findCoupon(codeInput);
+            couponCode = origCoupon.raw;
+            couponDiscount = Math.abs(subtotal - origCoupon.subtotal) < 0.005 || !c ? Math.min(origCoupon.discount, subtotal) : C.couponDiscountFor(c, subtotal);
+            setMsg(`✓ הנחה ${U.money(couponDiscount)}`, true);
+          } else if (codeInput) {
+            const res = C.validateCoupon(codeInput, subtotal, (o && o.createdAt) || U.today(), v.phone, { excludeOrderId: o && o.id });
+            if (res.ok) { couponDiscount = res.discount; couponCode = res.coupon.code; setMsg(`✓ הנחה ${U.money(res.discount)}`, true); }
+            else { couponErr = res.reason; setMsg('⚠ ' + res.reason, false); }
+          } else setMsg('', true);
+          d.couponCode = couponCode; d.couponDiscount = couponDiscount; d.couponErr = couponErr;
           const t = C.orderTotals({ items: its, discount: v.discount, couponDiscount, method, deliveryFee: v.deliveryFee, paid: v.paid });
           w.querySelector('#sumBox').innerHTML = `${U.money(t.total)}${couponDiscount ? `<div class="small" style="font-family:var(--sans);color:var(--ok)">− קופון ${U.money(couponDiscount)}</div>` : ''}${t.balance ? `<div class="small" style="font-family:var(--sans);color:var(--bad)">יתרה ${U.money(t.balance)}</div>` : ''}`;
           // התראת אלרגנים מול המוצרים
@@ -414,12 +426,12 @@
             if (!v.date) return A.toast('חסר תאריך');
             if (!its.length) return A.toast('הוסיפי לפחות מוצר אחד');
             if (its.some(i => !(i.qty > 0))) return A.toast('כמות חייבת להיות גדולה מ־0');
+            update();
+            if (d.couponErr) { const ci = w.querySelector('[name=couponCode]'); ci.focus(); return A.toast(`קוד הקופון לא תקף: ${d.couponErr}. תקני או מחקי אותו`); }
             const target = o || { id: U.uid(), num: s.nextOrderNum++, createdAt: U.today() };
-            const prevCoupon = target.couponCode || '';
             Object.assign(target, v, { method, items: its, deliveryFee: method === 'delivery' ? (v.deliveryFee || 0) : 0, discount: v.discount || 0, paid: v.paid || 0, couponCode: d.couponCode || '', couponDiscount: d.couponDiscount || 0, demo: false });
             if (method !== 'delivery') target.address = '';
             if (isNew) A.state.orders.push(target);
-            if (target.couponCode && target.couponCode !== prevCoupon) C.incrementCouponUse(target.couponCode);
             A.save(); A.refresh(); A.openOrder(target.id); A.toast(isNew ? 'ההזמנה נקלטה' : 'נשמר');
           }
         });

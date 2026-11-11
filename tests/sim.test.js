@@ -162,11 +162,53 @@ t('מיזוג סנכרון בין שני מכשירים', () => {
   assert.strictEqual(A.syncMerge(base, l2, r2).orders.find(o => o.id === 'o1').notes, 'שינוי חשוב');
   // שום שינוי => זהה
   assert.ok(A.syncEq(A.syncMerge(base, base, remote), A.normalize(JSON.parse(JSON.stringify(remote)))) || true);
+  base.couponsMerged = true; // מצב יציב: אחרי המיזוג הראשון של הקופונים
   assert.ok(A.syncEq(A.syncMerge(base, JSON.parse(JSON.stringify(base)), JSON.parse(JSON.stringify(base))), base));
 });
 
+t('סנכרון קופונים: איחוד בפעם הראשונה, ומיזוג לפי רשומה אחר כך', () => {
+  const cp = (id, code, extra) => Object.assign({ id, code, type: 'percent', value: 10, active: true }, extra);
+  // לפני העדכון כל מכשיר החזיק רק את הקופונים שלו, והבסיס השמור הוא בלי הדגל
+  const oldBase = A.normalize(null); oldBase.coupons = [cp('a', 'DESK10')];
+  const local = JSON.parse(JSON.stringify(oldBase));
+  const remote = A.normalize(null); remote.coupons = [cp('b', 'PHONE5')];
+  const m = A.syncMerge(oldBase, local, remote);
+  assert.strictEqual(m.coupons.map(c => c.code).sort().join(), 'DESK10,PHONE5', 'שום קופון לא נמחק במיזוג הראשון');
+  assert.strictEqual(m.couponsMerged, true);
+  // מכאן: מחיקה במכשיר אחד ועריכה במכשיר אחר עוברות שתיהן
+  const l2 = JSON.parse(JSON.stringify(m)), r2 = JSON.parse(JSON.stringify(m));
+  l2.coupons = l2.coupons.filter(c => c.id !== 'a'); r2.coupons.find(c => c.id === 'b').oncePerCustomer = true;
+  r2.coupons.push(cp('c', 'NEW15'));
+  const m2 = A.syncMerge(m, l2, r2);
+  assert.strictEqual(m2.coupons.map(c => c.code).sort().join(), 'NEW15,PHONE5');
+  assert.strictEqual(m2.coupons.find(c => c.id === 'b').oncePerCustomer, true);
+  assert.ok(A.syncEq(A.syncMerge(m2, JSON.parse(JSON.stringify(m2)), JSON.parse(JSON.stringify(m2))), m2), 'בלי שינוי — זהה');
+});
+
+t('קופונים: שימושים נספרים מההזמנות, חד־פעמי לכל לקוחה והזמנה ראשונה', () => {
+  const save = A.state; const st = A.normalize(null); A.state = st;
+  st.coupons.push({ id: 'k1', code: 'ONCE10', type: 'percent', value: 10, active: true, oncePerCustomer: true },
+    { id: 'k2', code: 'FIRST5', type: 'fixed', value: 5, active: true, firstOrderOnly: true },
+    { id: 'k3', code: 'TWO', type: 'percent', value: 20, active: true, maxUses: 2 });
+  st.orders.push({ id: 'o1', num: 1, status: 'new', phone: '050-111-2233', couponCode: 'once10', couponDiscount: 5, items: [] },
+    { id: 'o2', num: 2, status: 'cancelled', phone: '0502223344', couponCode: 'ONCE10', couponDiscount: 5, items: [] },
+    { id: 'o3', num: 3, status: 'new', phone: '0503334455', couponCode: 'TWO', items: [] },
+    { id: 'o4', num: 4, status: 'done', phone: '0503334455', couponCode: 'TWO', items: [] });
+  assert.strictEqual(C.couponUses('ONCE10'), 1, 'הזמנה מבוטלת לא נספרת');
+  near(C.validateCoupon('once10', 100, '', '0509998877').discount, 10);
+  assert.ok(!C.validateCoupon('ONCE10', 100, '', '+972 50-111-2233').ok, 'אותה לקוחה בפורמט טלפון אחר נחסמת');
+  assert.ok(C.validateCoupon('ONCE10', 100, '', '+972501112233', { excludeOrderId: 'o1' }).ok, 'עריכת ההזמנה עצמה לא חוסמת את עצמה');
+  assert.ok(C.validateCoupon('ONCE10', 100, '', '0502223344').ok, 'הזמנה שבוטלה משחררת את הקוד');
+  assert.ok(!C.validateCoupon('FIRST5', 100, '', '972501112233').ok, 'לקוחה קיימת לא מקבלת קוד של הזמנה ראשונה');
+  near(C.validateCoupon('FIRST5', 3, '', '0507776655').discount, 3, 0.001, 'הנחה קבועה לא עולה על סכום ההזמנה');
+  assert.ok(!C.validateCoupon('TWO', 100, '', '0501').ok, 'מגבלת שימושים כוללת');
+  st.orders.find(o => o.id === 'o4').status = 'cancelled';
+  assert.ok(C.validateCoupon('TWO', 100, '', '0501').ok, 'ביטול הזמנה מחזיר שימוש');
+  A.state = save;
+});
+
 t('סנכרון מתכנס (אין פינג־פונג של סדר רשימות)', () => {
-  const remote = A.normalize(null); A.seed.catalog(remote);
+  const remote = A.normalize(null); A.seed.catalog(remote); remote.couponsMerged = true;
   remote.orders.push({ id: 'a', num: 1, items: [] }, { id: 'b', num: 2, items: [] });
   const local = JSON.parse(JSON.stringify(remote)); local.orders.reverse(); local.ingredients.reverse();
   assert.ok(A.syncEq(A.syncMerge(remote, local, remote), remote), 'אחרי מיזוג המכשיר זהה לענן');

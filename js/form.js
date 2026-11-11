@@ -74,7 +74,7 @@
     // קופונים ציבוריים (רק פעילים) — כולל דגל firstOrderOnly לצד הלקוחה. אין כאן מידע סודי: הקוד עצמו מחולק ללקוחות.
     const coupons = (A.state.coupons || []).filter(c => c.active !== false && (!c.to || c.to >= t)).map(c => ({
       code: c.code, type: c.type, value: +c.value || 0, minOrder: +c.minOrder || 0,
-      from: c.from || '', to: c.to || '', maxUses: +c.maxUses || 0, uses: +c.uses || 0, firstOrderOnly: !!c.firstOrderOnly
+      from: c.from || '', to: c.to || '', maxUses: +c.maxUses || 0, uses: C.couponUses(c), firstOrderOnly: !!c.firstOrderOnly, oncePerCustomer: !!c.oncePerCustomer
     }));
     return {
       v: 2, bizName: s.businessName, phone: U.phoneIntl(s.phone), open: !!f.open, closedMsg: f.closedMsg, title: f.title, intro: f.intro,
@@ -129,7 +129,6 @@
           const res = C.validateCoupon(p.couponCode, subtotal, (row.created_at || '').slice(0, 10) || U.today(), p.phone);
           couponCode = p.couponCode; couponDiscount = +p.couponDiscount;
           if (!res.ok) itemNotes.push(`⚠ קופון ${p.couponCode} הוחל בטופס (${U.money(couponDiscount)}), אבל לפי הרישום שלך: ${res.reason}`);
-          C.incrementCouponUse(couponCode);
         }
         const o = {
           id, num: A.state.settings.nextOrderNum++, formRef: 1000 + row.id, customerName: p.name, phone: p.phone, date: p.date, time: p.time || '',
@@ -306,7 +305,7 @@
       </div>`;
   };
   const textsHtml = () => {
-    const f = fs(), s = A.state.settings, nCp = (A.state.coupons || []).filter(c => c.active !== false).length;
+    const f = fs(), s = A.state.settings, td = U.today(), nCp = (A.state.coupons || []).filter(c => c.active !== false && (!c.to || c.to >= td) && !(+c.maxUses && C.couponUses(c) >= +c.maxUses)).length;
     return `<div class="card section"><div class="card-h"><h3>מה הלקוחות רואות</h3></div>
         <div class="form-grid">
           <label class="field full"><span>כותרת</span>${inp('title', f.title)}</label>
@@ -335,7 +334,7 @@
             <button class="btn sm ghost" data-act="publish">פרסום עכשיו</button></div>
           <div class="row" style="margin-top:4px;gap:14px">
             <label class="switch-row"><span class="switch"><input type="checkbox" data-p="open" ${f.open ? 'checked' : ''}><i></i></span><b>${f.open ? 'הטופס פתוח להזמנות' : 'הטופס סגור'}</b></label>
-            ${root.Notification && Notification.permission !== 'granted' ? `<button class="btn sm soft" data-act="notif">${A.icon('alert')}הפעלת התראות על הזמנה חדשה</button>` : ''}
+            ${root.Notification && Notification.permission !== 'granted' ? `<button class="btn sm soft" data-act="notif">${A.icon('bell')}הפעלת התראות על הזמנה חדשה</button>` : ''}
           </div>
           ${!f.open ? `<label class="field"><span>הודעה כשהטופס סגור</span>${inp('closedMsg', f.closedMsg)}</label>` : ''}
           <p class="small muted" style="margin:0">${fromForm} הזמנות התקבלו מהטופס עד היום. הקישור לא משתנה לעולם — כל שינוי כאן מתעדכן בו תוך שניות.</p>

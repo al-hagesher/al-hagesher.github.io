@@ -74,7 +74,18 @@
     if (+c.minOrder && sub < +c.minOrder) return { ok: false, code: c.code, reason: `הקוד תקף בהזמנה מעל ${money(+c.minOrder)}` };
     const val = Math.max(+c.value || 0, 0);
     const d = c.type === 'percent' ? Math.round(sub * Math.min(val, 100)) / 100 : Math.min(val, sub);
-    return { ok: true, code: c.code, discount: Math.round(d * 100) / 100, first: !!c.firstOrderOnly };
+    return { ok: true, code: c.code, discount: Math.round(d * 100) / 100, first: !!c.firstOrderOnly, once: !!c.oncePerCustomer };
+  }
+  // באנר "הקוד מחכה לך" — לקוחה שהגיעה מקישור עם קוד רואה מיד שהוא התקבל, עוד לפני שבחרה מוצרים
+  let giftErr = '';
+  function drawGift() {
+    const box = $('#gift'); if (!box) return;
+    const code = (st.coupon || '').trim().toUpperCase(), c = code && (cfg.coupons || []).find(x => String(x.code || '').toUpperCase() === code), r = code && coupon();
+    if (!c || !r || r.fatal) { box.innerHTML = giftErr ? `<div class="gift bad"><span class="e">🏷️</span><div><b>${esc(giftErr)}</b><span>אפשר להזמין כרגיל, או להזין קוד אחר בסיכום ההזמנה.</span></div></div>` : ''; return; }
+    const val = Math.max(+c.value || 0, 0), terms = [
+      +c.minOrder ? `בהזמנה מעל ${money(+c.minOrder)}` : '', c.firstOrderOnly ? 'להזמנה ראשונה בלבד' : c.oncePerCustomer ? 'לשימוש חד־פעמי' : '', c.to ? `בתוקף עד ${fmtD(c.to)}` : ''
+    ].filter(Boolean).join(' · ');
+    box.innerHTML = `<div class="gift"><span class="e">🎁</span><div><b>${c.type === 'percent' ? Math.min(val, 100) + '%' : money(val)} הנחה מחכה לך</b><span>קוד <span class="cptag">${esc(c.code)}</span> יופעל אוטומטית בסיכום ההזמנה${terms ? ' · ' + terms : ''}</span></div></div>`;
   }
   const discount = () => { const c = coupon(); return c && c.ok ? c.discount : 0; };
   const total = () => Math.max(subtotal() + fee() - discount(), 0);
@@ -122,7 +133,10 @@
     const head = `${preview ? '<div class="preview-banner">תצוגה מקדימה — הזמנות לא נשלחות מכאן</div>' : ''}<div class="hero"><h1>${esc(cfg.title)}</h1>`;
     if (!cfg.open && !preview) return emptyPage(`${head}</div><div class="empty">${esc(cfg.closedMsg || 'ההזמנות סגורות כרגע')}</div>`);
     if (!cfg.products.length) return emptyPage(`${head}</div><div class="empty">התפריט מתעדכן — חזרי בקרוב 🤎</div>`);
-    loadDraft(); build();
+    loadDraft();
+    // קוד שהגיע מהקישור (או נשמר בטיוטה) וכבר לא תקף — מסירים אותו ומסבירים, במקום שהלקוחה תגלה רק בסוף
+    if (st.coupon) { const c = coupon(); if (c && c.fatal) { giftErr = `קוד ההנחה ${st.coupon.trim().toUpperCase().slice(0, 30)} לא התקבל: ${c.reason}`; st.coupon = ''; } }
+    build();
   }
 
   // ---------- מוצר ----------
@@ -188,7 +202,7 @@
     const fld = (id, k, label, extra) => `<label class="fld"><span>${label}</span><input id="${id}" data-f="${k}" value="${esc(st[k])}" ${extra || ''}><small class="ferr" id="e_${id}"></small></label>`;
     app.innerHTML = `
       ${preview ? '<div class="preview-banner">תצוגה מקדימה — הזמנות לא נשלחות מכאן</div>' : ''}
-      <div class="hero"><h1>${esc(cfg.title)}</h1>${cfg.intro ? `<p class="intro">${esc(cfg.intro)}</p>` : ''}<div class="pills">${pills.map(t => `<span class="pill">${esc(t)}</span>`).join('')}</div></div>
+      <div class="hero"><h1>${esc(cfg.title)}</h1>${cfg.intro ? `<p class="intro">${esc(cfg.intro)}</p>` : ''}<div class="pills">${pills.map(t => `<span class="pill">${esc(t)}</span>`).join('')}</div><div id="gift" aria-live="polite"></div></div>
       <section id="s-menu"><h2><span class="n">1</span>מה תרצי להזמין?</h2>
         ${cats.length > 1 ? `<nav class="cats" id="cats" aria-label="קטגוריות">${cats.map((c, i) => `<button type="button" data-cat="${i}" class="${i ? '' : 'on'}">${esc(c || 'עוד')}</button>`).join('')}</nav>` : ''}
         ${cats.map((c, i) => `<div class="catsec" id="cat-${i}" data-ci="${i}">${cats.length > 1 ? `<h3 class="cat">${esc(c || 'עוד')}</h3>` : ''}<div class="card">${cfg.products.filter(p => (p.cat || '') === c).map(prodHtml).join('')}</div></div>`).join('')}
@@ -214,7 +228,7 @@
       <div class="toast" id="toast" role="status"></div>
       <dialog class="sheet" id="cartDlg" aria-label="הסל שלי"><div class="sh-head"><h3>הסל שלי</h3><button type="button" class="x" data-shclose aria-label="סגירה">✕</button></div><div class="sh-body" id="cartBody"></div><div id="cartMsg"></div><div class="sh-foot"><button type="button" class="btn ghost" data-shclose>עוד מוצרים</button><button type="button" class="btn" data-cartgo>המשך</button></div></dialog>
       <dialog class="zoom" id="imgDlg"><img alt=""><p></p></dialog>`);
-    drawWhen(); drawHow(); drawSum(); drawBar(); spy();
+    drawWhen(); drawHow(); drawSum(); drawBar(); drawGift(); spy();
     if (count()) toast('שמרתי לך את מה שבחרת 🤎');
   }
   // הדגשת הקטגוריה שנמצאת עכשיו על המסך
@@ -235,7 +249,7 @@
   function totalsHtml() {
     const f = fee(), c = coupon(), t = total(), due = dueFor(t);
     return `${st.method === 'delivery' && cfg.delivery.on ? `<div class="sl"><span>משלוח</span><span>${f ? money(f) : 'חינם'}</span></div>` : ''}
-      ${c && c.ok ? `<div class="sl cpn ok"><span>קוד הנחה <span class="cptag">${esc(c.code)}</span><button type="button" class="x" data-cpx aria-label="הסרת קוד ההנחה">✕</button>${c.first ? '<small>להזמנה ראשונה בלבד</small>' : ''}</span><span>−${money(c.discount)}</span></div>`
+      ${c && c.ok ? `<div class="sl cpn ok"><span>קוד הנחה <span class="cptag">${esc(c.code)}</span><button type="button" class="x" data-cpx aria-label="הסרת קוד ההנחה">✕</button>${c.first ? '<small>להזמנה ראשונה בלבד</small>' : c.once ? '<small>לשימוש חד־פעמי</small>' : ''}</span><span>−${money(c.discount)}</span></div>`
         : c ? `<div class="sl cpn soft"><span><span class="cptag">${esc(c.code)}</span> ${esc(c.reason)}<button type="button" class="x" data-cpx aria-label="הסרת קוד ההנחה">✕</button></span><span></span></div>` : ''}
       <div class="sl tot"><span>סה״כ</span><span>${money(t)}</span></div>
       ${due && pay().mode === 'deposit' ? `<div class="sl due"><span>מקדמה לאישור ההזמנה (${pay().pct || 50}%)</span><span>${money(due)}</span></div>` : ''}`;
@@ -248,7 +262,7 @@
       : `<button type="button" class="link sm" data-cpopen>יש לך קוד הנחה?</button>${cpErr ? `<small class="ferr">${esc(cpErr)}</small>` : ''}`;
     box.innerHTML = ls.length ? `${ls.map(l => `<div class="sl"><span>${lineName(l)}${notes[l.p.id] && firstOf(l) ? `<small>${esc(notes[l.p.id])}</small>` : ''}</span><span>${money(l.q * l.p.price)}</span></div>`).join('')}
       ${st.date ? `<div class="sl"><span><i>${st.method === 'delivery' ? 'משלוח' : 'איסוף'}:</i> יום ${DAYS[parse(st.date).getDay()]} ${fmtD(st.date)}${st.time ? ' · ' + st.time : ''}</span><span></span></div>` : ''}
-      ${totalsHtml()}${cp}` : `<p class="empty-sum">עוד לא בחרת מוצרים.</p>${cp}`;
+      ${totalsHtml()}${cp}` : `<p class="empty-sum">עוד לא בחרת מוצרים.</p>${st.coupon ? `<div class="sl cpn ok"><span>קוד הנחה <span class="cptag">${esc(st.coupon.trim().toUpperCase())}</span><button type="button" class="x" data-cpx aria-label="הסרת קוד ההנחה">✕</button><small>ההנחה תחושב כשתבחרי מוצרים</small></span><span></span></div>` : ''}${cp}`;
     if (hadFocus && $('#f_cp')) $('#f_cp').focus({ preventScroll: true });
     const pn = $('#payNote'), rule = payRule() || cfg.payInfo || '';
     if (pn) { pn.hidden = !rule; pn.textContent = rule ? '💳 ' + rule : ''; }
@@ -287,7 +301,7 @@
   }
   let toastT;
   function toast(msg) { const el = $('#toast'); if (!el) return; el.textContent = msg; el.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove('show'), 2800); }
-  const redraw = () => { drawSum(); drawBar(); if ($('#cartDlg') && $('#cartDlg').open) drawCart(); saveDraft(); };
+  const redraw = () => { drawSum(); drawBar(); drawGift(); if ($('#cartDlg') && $('#cartDlg').open) drawCart(); saveDraft(); };
   function setQty(id, o, d) {
     const p = prodOf(id); if (!p) return; const k = key(id, o), max = maxOf(p), cur = cart[k] || 0;
     if (d > 0 && cur >= max) return toast(`אפשר להזמין עד ${max} מ${p.name}`);
@@ -304,7 +318,8 @@
   function applyCoupon() {
     const inp = $('#f_cp'), code = inp ? inp.value.trim().toUpperCase() : ''; if (!code) return;
     st.coupon = code; const c = coupon();
-    if (c && c.fatal) { st.coupon = ''; cpErr = c.reason; drawSum(); const i = $('#f_cp'); if (i) { i.value = code; i.classList.add('bad'); i.focus({ preventScroll: true }); } return; }
+    giftErr = '';
+    if (c && c.fatal) { st.coupon = ''; cpErr = c.reason; drawSum(); drawGift(); const i = $('#f_cp'); if (i) { i.value = code; i.classList.add('bad'); i.focus({ preventScroll: true }); } return; }
     cpErr = ''; cpOpen = false; redraw();
     toast(c && c.ok ? `קוד ההנחה הופעל — חסכת ${money(c.discount)} 🎉` : c ? c.reason : '');
   }

@@ -411,29 +411,43 @@
     const k = (code || '').trim().toUpperCase(); if (!k) return null;
     return (A.state.coupons || []).find(c => (c.code || '').toUpperCase() === k) || null;
   };
-  C.validateCoupon = (codeOrCoupon, subtotal, orderDate, phone) => {
+  // ההזמנות (שלא בוטלו) שהשתמשו בקוד. מספר השימושים נגזר מההזמנות עצמן — כך ביטול או מחיקה של הזמנה
+  // מחזירים את השימוש לבד, ואין מונה נפרד שיכול לצאת מסנכרון בין מכשירים.
+  C.couponOrders = (code, excludeOrderId) => {
+    const k = String((code && code.code) || code || '').trim().toUpperCase(); if (!k) return [];
+    return (A.state.orders || []).filter(o => o.status !== 'cancelled' && o.id !== excludeOrderId && String(o.couponCode || '').trim().toUpperCase() === k);
+  };
+  C.couponUses = (code, excludeOrderId) => C.couponOrders(code, excludeOrderId).length;
+  C.couponDiscountFor = (c, subtotal) => {
+    const val = Math.max(+c.value || 0, 0);
+    const d = c.type === 'percent' ? subtotal * Math.min(val, 100) / 100 : Math.min(val, subtotal);
+    return Math.max(0, Math.round(d * 100) / 100);
+  };
+  // 9 הספרות האחרונות — כך 050-1234567 ו־972501234567+ נחשבים לאותה לקוחה
+  const phone9 = p => String(p || '').replace(/\D/g, '').slice(-9);
+  // opts.excludeOrderId — ההזמנה שנערכת עכשיו (לא נספרת כשימוש ולא כ"הזמנה קודמת")
+  C.validateCoupon = (codeOrCoupon, subtotal, orderDate, phone, opts) => {
     const c = typeof codeOrCoupon === 'string' ? C.findCoupon(codeOrCoupon) : codeOrCoupon;
+    const ex = opts && opts.excludeOrderId;
     if (!c) return { ok: false, reason: 'קוד לא קיים' };
-    if (c.active === false) return { ok: false, reason: 'הקופון לא פעיל' };
+    if (c.active === false) return { ok: false, reason: 'הקופון כבוי' };
     const today = orderDate || U.today();
-    if (c.from && today < c.from) return { ok: false, reason: 'הקופון עוד לא תקף' };
-    if (c.to && today > c.to) return { ok: false, reason: 'הקופון פג תוקף' };
-    if (c.minOrder && subtotal < c.minOrder) return { ok: false, reason: `הזמנה מינימלית ${U.money(c.minOrder)}` };
-    if (c.maxUses && (c.uses || 0) >= c.maxUses) return { ok: false, reason: 'הקופון נוצל במלואו' };
-    if (c.firstOrderOnly && phone) {
-      const normPhone = (phone || '').replace(/\D/g, '');
-      const existing = A.state.orders.some(o => o.phone && o.phone.replace(/\D/g, '') === normPhone && o.status !== 'cancelled');
-      if (existing) return { ok: false, reason: 'הקופון מיועד להזמנה ראשונה בלבד' };
+    if (c.from && today < c.from) return { ok: false, reason: `הקופון בתוקף רק מ־${U.fmtDate(c.from)}` };
+    if (c.to && today > c.to) return { ok: false, reason: `הקופון פג תוקף ב־${U.fmtDate(c.to)}` };
+    if (+c.minOrder && subtotal < +c.minOrder) return { ok: false, reason: `הקופון תקף בהזמנה מעל ${U.money(+c.minOrder)}` };
+    if (+c.maxUses && C.couponUses(c, ex) >= +c.maxUses) return { ok: false, reason: 'הקופון נוצל במלואו' };
+    const p9 = phone9(phone);
+    if (c.firstOrderOnly && p9.length >= 7) {
+      const existing = A.state.orders.some(o => o.id !== ex && o.status !== 'cancelled' && phone9(o.phone) === p9);
+      if (existing) return { ok: false, reason: 'הקופון מיועד להזמנה ראשונה בלבד, ולמספר הזה כבר יש הזמנה' };
     }
-    const val = +c.value || 0;
-    const discount = c.type === 'percent' ? Math.round(subtotal * val) / 100 : Math.min(val, subtotal);
-    return { ok: true, coupon: c, discount: Math.max(0, Math.round(discount * 100) / 100) };
+    // חד־פעמי לכל לקוחה: אותו מספר טלפון לא יכול להשתמש בקוד פעמיים
+    if (c.oncePerCustomer && p9.length >= 7 && C.couponOrders(c, ex).some(o => phone9(o.phone) === p9))
+      return { ok: false, reason: 'הלקוחה כבר השתמשה בקוד הזה (הקוד חד־פעמי לכל לקוחה)' };
+    return { ok: true, coupon: c, discount: C.couponDiscountFor(c, subtotal) };
   };
-  C.incrementCouponUse = code => {
-    const c = C.findCoupon(code); if (!c) return;
-    c.uses = (c.uses || 0) + 1;
-    if (c.maxUses && c.uses >= c.maxUses) c.active = false;
-  };
+  // נשאר לתאימות לאחור — אין יותר מונה לעדכן (ראי couponUses)
+  C.incrementCouponUse = () => { };
   C.payState = o => {
     const t = C.orderTotals(o);
     if (o.payDue > 0 && t.paid < o.payDue - 0.01 && o.status !== 'cancelled') return o.payClaim ? { label: 'דיווחה ששילמה', cls: 'info' } : { label: 'ממתינה לתשלום', cls: 'warn' };

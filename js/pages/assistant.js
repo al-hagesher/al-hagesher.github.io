@@ -367,13 +367,24 @@ ${JSON.stringify(stateSnapshot(), null, 2)}
         type: { type: 'string', enum: ['percent', 'fixed'] },
         value: { type: 'number' },
         min_order: { type: 'number' },
-        max_uses: { type: 'integer' },
+        max_uses: { type: 'integer', description: 'מגבלת שימושים כוללת לכל הלקוחות יחד (0 = ללא הגבלה)' },
+        once_per_customer: { type: 'boolean', description: 'חד־פעמי לכל לקוחה (לפי מספר טלפון)' },
+        first_order_only: { type: 'boolean', description: 'רק להזמנה ראשונה של לקוחה חדשה' },
+        valid_from: { type: 'string', description: 'YYYY-MM-DD' },
+        valid_to: { type: 'string', description: 'YYYY-MM-DD' },
         note: { type: 'string' }
       } },
       execute(args) {
-        const code = args.code.trim().toUpperCase();
-        if (A.state.coupons.some(c => c.code.toUpperCase() === code)) return JSON.stringify({ error: 'קוד כבר קיים' });
-        const c = { id: U.uid(), code, type: args.type, value: args.value, minOrder: args.min_order || 0, maxUses: args.max_uses || 0, uses: 0, active: true, note: args.note || '', from: '', to: '' };
+        const code = String(args.code || '').replace(/\s+/g, '').toUpperCase();
+        if (!code) return JSON.stringify({ error: 'חסר קוד' });
+        if (A.state.coupons.some(c => (c.code || '').toUpperCase() === code)) return JSON.stringify({ error: 'קוד כבר קיים' });
+        const type = args.type === 'fixed' ? 'fixed' : 'percent', value = +args.value || 0;
+        if (!(value > 0)) return JSON.stringify({ error: 'ערך ההנחה חייב להיות גדול מ-0' });
+        if (type === 'percent' && value > 100) return JSON.stringify({ error: 'אחוז הנחה חייב להיות עד 100' });
+        const day = s => /^\d{4}-\d{2}-\d{2}$/.test(s || '') ? s : '';
+        const from = day(args.valid_from), to = day(args.valid_to);
+        if (from && to && from > to) return JSON.stringify({ error: 'תאריך הסיום לפני תאריך ההתחלה' });
+        const c = { id: U.uid(), code, type, value, minOrder: Math.max(+args.min_order || 0, 0), maxUses: Math.max(Math.floor(+args.max_uses || 0), 0), active: true, note: args.note || '', from, to, firstOrderOnly: !!args.first_order_only, oncePerCustomer: !!args.once_per_customer };
         A.state.coupons.push(c); saveState('קופון נוצר');
         return JSON.stringify({ ok: true, code: c.code });
       }

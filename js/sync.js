@@ -90,7 +90,7 @@
   };
   A.reconcileState = (target, source) => recObj(target, U.clone(source));
   // "מכשיר ריק": אין שום נתון שהמשתמשת הזינה (מתכוני הבסיס והמחסן ההתחלתי לא נחשבים)
-  A.isFreshState = s => !s.orders.length && !s.expenses.length && !s.wheel.entries.length && !s.recipes.some(r => !r.library)
+  A.isFreshState = s => !s.orders.length && !s.expenses.length && !s.wheel.entries.length && !s.recipes.some(r => !r.library && !String(r.id).startsWith('lib-'))
     && !Object.keys(s.customers || {}).length && !(s.form && s.form.enabled) && !s.settings.welcomeDone && !s.settings.ownerName;
   A.syncEq = eq;
 

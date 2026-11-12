@@ -85,7 +85,17 @@
       onlyDates: (f.onlyDates || []).filter(d => d >= t).sort(), blocked: f.blocked.filter(d => d >= t),
       pay: { mode: f.pay.mode, pct: +f.pay.pct || 50, bit: f.pay.bit || s.phone || '', bitLink: A.safeUrl(f.pay.bitLink), paybox: A.safeUrl(f.pay.paybox), hours: +f.pay.hours || 24 },
       days: f.days, delivery: { on: !!f.delivery.on, fee: +f.delivery.fee || 0, freeAbove: +f.delivery.freeAbove || 0, note: f.delivery.note || '' },
-      products, coupons, load: F.load()
+      products, coupons, load: F.load(), feedback: F.feedbackConfig()
+    };
+  };
+  // טופס המשוב (feedback.html) קורא את ההגדרות האלה מאותו טופס
+  F.feedbackConfig = () => {
+    const b = fs().feedback || A.feedbackDefaults();
+    return {
+      on: !!b.on, title: String(b.title || '').slice(0, 80), intro: String(b.intro || '').slice(0, 400), thanks: String(b.thanks || '').slice(0, 300),
+      reviewLink: A.safeUrl(b.reviewLink), photos: b.photos !== false,
+      questions: (b.questions || []).filter(q => q && q.id && String(q.label || '').trim()).slice(0, 12)
+        .map(q => ({ id: String(q.id).slice(0, 20), type: q.type === 'text' ? 'text' : 'rating', label: String(q.label).trim().slice(0, 120), required: !!q.required }))
     };
   };
   const canon = v => A.syncEq ? JSON.stringify(v) : JSON.stringify(v);

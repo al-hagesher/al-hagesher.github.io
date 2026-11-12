@@ -2,7 +2,7 @@
 const fs = require('fs'), path = require('path'), vm = require('vm'), assert = require('assert');
 const ctx = { console, Intl, TextEncoder, TextDecoder, btoa: s => Buffer.from(s, 'binary').toString('base64'), atob: s => Buffer.from(s, 'base64').toString('binary') };
 ctx.window = ctx; vm.createContext(ctx);
-['js/core.js', 'js/seed.js', 'js/library.js', 'js/sync.js', 'js/pages/production.js', 'tests/demo-fixture.js', 'js/video-plan.js', 'js/video-analyze.js', 'js/video-voice.js', 'js/music.js', 'js/receipts.js'].forEach(f => vm.runInContext(fs.readFileSync(path.join(__dirname, '..', f), 'utf8'), ctx, { filename: f }));
+['js/core.js', 'js/seed.js', 'js/library.js', 'js/sync.js', 'js/pages/production.js', 'tests/demo-fixture.js', 'js/video-plan.js', 'js/video-analyze.js', 'js/video-voice.js', 'js/music.js', 'js/receipts.js', 'js/pages/feedback.js'].forEach(f => vm.runInContext(fs.readFileSync(path.join(__dirname, '..', f), 'utf8'), ctx, { filename: f }));
 const A = ctx.App, U = A.util, C = A.calc;
 let n = 0; const t = (name, fn) => { fn(); n++; console.log('✓', name); };
 const near = (a, b, eps = 0.01, msg) => assert.ok(Math.abs(a - b) <= eps, `${msg || ''} expected ${b}, got ${a}`);
@@ -529,5 +529,49 @@ t('קבלות: פענוח, התאמה למצרכים, מחיר ממוצע, מל�
   [1, 2, 3].forEach(k => A.recordPurchase(oil, { date: U.addDays(U.today(), -k), qty: 1, unit: 'l', price: 10 }));
   near(A.calc.avgPurchase(oil).perUnit, 10);
   A.state = save;
+});
+t('משובים: ברירת מחדל, מיזוג בין מכשירים, קליטה ותובנות', () => {
+  // ברירת מחדל בטופס קיים, ושאלות מותאמות נשמרות
+  const s0 = A.normalize({ form: { enabled: true, slug: 'abc', key: 'k' } });
+  assert.strictEqual(s0.form.feedback.on, true);
+  assert.strictEqual(s0.form.feedback.questions[0].type, 'rating');
+  assert.ok(Array.isArray(s0.feedback));
+  const s1 = A.normalize({ form: { feedback: { on: false, questions: [{ id: 'z', type: 'text', label: 'מה?' }] } } });
+  assert.strictEqual(s1.form.feedback.on, false);
+  assert.strictEqual(JSON.stringify(s1.form.feedback.questions.map(q => q.id)), '["z"]');
+  assert.ok(s1.form.feedback.thanks);
+  // מיזוג: משוב שנקלט בכל מכשיר נשמר בשניהם; סימון "טופל" במכשיר אחד עובר
+  const fbA = { id: 'fb-1', rating: 5, status: 'open', answers: [] }, fbB = { id: 'fb-2', rating: 2, status: 'new', answers: [] };
+  const base = A.normalize({ feedback: [fbA] });
+  const local = A.normalize({ feedback: [Object.assign({}, fbA, { status: 'done' })] });
+  const remote = A.normalize({ feedback: [fbA, fbB] });
+  const m = A.syncMerge(base, local, remote);
+  assert.strictEqual(JSON.stringify(m.feedback.map(x => x.id + ':' + x.status).sort()), '["fb-1:done","fb-2:new"]');
+  // מכשיר ישן שלא מכיר משובים לא מוחק אותם
+  const old = JSON.parse(JSON.stringify(remote)); delete old.feedback;
+  assert.strictEqual(A.syncMerge(base, local, old).feedback.length, 1);
+  // קליטת שורה מהשרת
+  const FB = A.fb;
+  const x = FB.fromRow({ id: 77, rating: 2, created_at: '2026-11-12T21:30:00Z', payload: { name: 'דנה', phone: '050-1234567', consent: true, order: 12, photos: 2,
+    answers: [{ id: 'q1', type: 'rating', label: 'איך היה?', value: 2 }, { id: 'q7', type: 'text', label: 'מה לשפר?', value: 'הבצק היה יבש' }] } }, 'abc');
+  assert.strictEqual(x.id, 'fb-77'); assert.strictEqual(x.sid, 77); assert.strictEqual(x.order, 12); assert.strictEqual(x.photos, 2); assert.strictEqual(x.status, 'new');
+  assert.strictEqual(x.answers[0].value, 2); assert.strictEqual(x.answers[1].value, 'הבצק היה יבש');
+  assert.ok(FB.needsCare(x));
+  assert.ok(!FB.needsCare(Object.assign({}, x, { status: 'done' })));
+  assert.ok(!FB.needsCare({ rating: 5, answers: [{ type: 'rating', value: 4 }], status: 'open' }));
+  assert.ok(FB.needsCare({ rating: 4, answers: [{ type: 'rating', value: 4 }, { type: 'rating', value: 1 }], status: 'open' }), 'דירוג 1 בשאלה משנית דורש טיפול');
+  // תובנות
+  const qs = A.feedbackDefaults().questions;
+  const mk = (date, r, taste, look, txt) => ({ date, rating: r, status: 'open', photos: 0, answers: [{ id: 'q1', type: 'rating', value: r }, { id: 'q2', type: 'rating', label: 'הטעם', value: taste }, { id: 'q3', type: 'rating', label: 'אריזה', value: look }, ...(txt ? [{ id: 'q7', type: 'text', value: txt }] : [])] });
+  const list = [mk('2026-11-10', 5, 5, 3, 'הבצק אוורירי ומושלם'), mk('2026-11-05', 4, 5, 3, 'הבצק אוורירי'), mk('2026-10-30', 3, 4, 2, 'האריזה נמעכה'), mk('2026-09-25', 2, 4, 2, 'האריזה נמעכה בדרך'), mk('2026-09-20', 3, 4, 3, '')];
+  const ins = FB.insights(list, qs, '2026-11-12');
+  near(ins.overall, 3.4);
+  assert.strictEqual(JSON.stringify(ins.dist), '[0,1,2,1,1]');
+  assert.strictEqual(ins.weakest.id, 'q3'); assert.strictEqual(ins.weakest.label, 'המראה והאריזה', 'התווית העדכנית מהשאלות');
+  assert.ok(!ins.perQ.some(p => p.id === 'q1'), 'הדירוג הכללי לא נספר כ"תחום"');
+  near(ins.trend, 4 - 2.5);
+  assert.ok(ins.lowWords.some(([w]) => w === 'האריזה' || w === 'נמעכה'));
+  assert.ok(ins.highWords.some(([w]) => w === 'אוורירי'));
+  assert.strictEqual(ins.care, 3);
 });
 console.log(`\n${n} בדיקות עברו`);

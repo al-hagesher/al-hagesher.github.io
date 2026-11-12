@@ -677,3 +677,37 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: non
 .ce-ctl > span { display: inline-flex; align-items: center; gap: 4px; }
 .ce-t { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--brown-2, var(--brown)); }
 @media (max-width: 700px) { .ve-ctl label { width: calc(50% - 6px); } }
+
+/* ---------- משובים ---------- */
+.fb-star { color: #d9a441; font-size: .8em; }
+.kpi.fb-alert { border-color: var(--bad); }
+.kpi.fb-alert .val { color: var(--bad); }
+.fb-bar { display: grid; grid-template-columns: minmax(90px, 1.3fr) 2fr 34px 24px; align-items: center; gap: 8px; font-size: .88rem; margin-bottom: 7px; }
+.fb-bar.dist { grid-template-columns: 74px 2fr 30px; }
+.fb-bar.dist span { color: #d9a441; letter-spacing: -1px; }
+.fb-bar > div { height: 9px; background: var(--sand-2); border-radius: 99px; overflow: hidden; }
+.fb-bar i { display: block; height: 100%; background: var(--caramel); border-radius: 99px; }
+.fb-bar.weak i { background: var(--bad); }
+.fb-bar.weak span { color: var(--bad); font-weight: 700; }
+.fb-bar small { color: var(--muted); }
+.fb-item { border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; margin-bottom: 10px; background: var(--paper); }
+.fb-item.care { border-color: var(--bad); box-shadow: inset -4px 0 0 var(--bad); }
+.fb-item.done { opacity: .82; }
+.fb-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.fb-stars { color: #d9a441; font-size: 1.15rem; letter-spacing: 1px; }
+.fb-rats { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+.fb-rats .chip b { color: var(--brown); }
+.fb-rats .chip.low { border-color: var(--bad); color: var(--bad); }
+.fb-txt { margin-top: 8px; }
+.fb-txt small { color: var(--muted); font-weight: 600; }
+.fb-txt p { margin: 1px 0 0; white-space: pre-wrap; }
+.fb-phs { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.fb-ph { width: 84px; height: 84px; border-radius: 12px; overflow: hidden; border: 0; padding: 0; background: var(--sand-2); cursor: zoom-in; display: block; }
+.fb-ph img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.fb-ph.ph-wait { cursor: default; animation: fbwait 1.2s ease-in-out infinite alternate; }
+@keyframes fbwait { to { opacity: .45; } }
+.fb-note { margin-top: 8px; background: var(--sand-2); border-radius: 10px; padding: 7px 10px; font-size: .9rem; }
+.fb-acts { margin-top: 10px; gap: 6px; }
+.fbq-row { display: grid; grid-template-columns: 1fr auto auto auto; gap: 6px; align-items: center; margin-bottom: 6px; }
+.fbq-row select { width: auto; }
+@media (max-width: 560px) { .fbq-row { grid-template-columns: 1fr auto; } .fbq-row input[data-ql] { grid-column: 1 / -1; } .fb-bar { grid-template-columns: 1fr 1.4fr 30px 20px; } }

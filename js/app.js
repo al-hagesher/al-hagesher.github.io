@@ -4,7 +4,7 @@
   A.pages = A.pages || {};
   const NAV = [
     ['', 'home', 'בית'], ['assistant', 'spark', 'עוזרת AI'], ['orders', 'orders', 'הזמנות'], ['recipes', 'book', 'מתכונים'], ['form', 'link', 'טופס הזמנות'], ['coupons', 'tag', 'קופונים'], ['production', 'calendar', 'תכנון ייצור'],
-    ['pantry', 'box', 'מחסן ומחירים'], ['customers', 'users', 'לקוחות'], ['expenses', 'wallet', 'הוצאות ורווחיות'],
+    ['pantry', 'box', 'מחסן ומחירים'], ['customers', 'users', 'לקוחות'], ['feedback', 'star', 'משובים'], ['expenses', 'wallet', 'הוצאות ורווחיות'],
     'sep', ['video', 'play', 'סטודיו סרטונים'], ['stats', 'chart', 'סטטיסטיקות'], ['wheel', 'wheel', 'גלגל החיים'], ['tools', 'scale', 'כלים וממירים'], ['settings', 'settings', 'הגדרות וגיבוי']
   ];
   const TABS = [['', 'home', 'בית'], ['orders', 'orders', 'הזמנות'], ['recipes', 'book', 'מתכונים'], ['stats', 'chart', 'נתונים']];
@@ -30,11 +30,18 @@
     const navKey = page === 'recipe' ? 'recipes' : page;
     document.body.classList.toggle('home', !page);
     document.querySelectorAll('[data-nav]').forEach(a => a.classList.toggle('active', a.dataset.nav === navKey));
-    const fresh = A.state.orders.filter(o => o.status === 'new').length;
-    document.querySelectorAll('[data-nav="orders"]').forEach(a => { let b = a.querySelector('.nav-badge'); if (!b) { b = document.createElement('i'); b.className = 'nav-badge'; a.appendChild(b); } b.textContent = fresh || ''; b.style.display = fresh ? '' : 'none'; });
+    A.updateBadges();
     try { p.render(main, args); A.a11y && A.a11y(main); }
     catch (e) { console.error(e); main.innerHTML = `<div class="card"><h3>משהו השתבש</h3><p class="muted">${U.esc(e.message)}</p></div>`; }
     closeMenu();
+  };
+  // מספרים על פריטי התפריט: הזמנות חדשות, משובים שעוד לא נקראו
+  A.updateBadges = () => {
+    const counts = { orders: A.state.orders.filter(o => o.status === 'new').length, feedback: A.fb ? A.fb.unseen() : 0 };
+    Object.entries(counts).forEach(([k, n]) => document.querySelectorAll(`[data-nav="${k}"]`).forEach(a => {
+      let b = a.querySelector('.nav-badge'); if (!b) { b = document.createElement('i'); b.className = 'nav-badge'; a.appendChild(b); }
+      b.textContent = n || ''; b.style.display = n ? '' : 'none';
+    }));
   };
   // רענון הדף הנוכחי בלי לאבד גלילה
   A.refresh = () => { const y = root.scrollY; A.render(); root.scrollTo(0, y); };
@@ -67,6 +74,7 @@
     await A.load();
     A.sync && A.sync.init();
     A.form && A.form.init();
+    A.fb && A.fb.init();
     root.addEventListener('hashchange', () => { A.render(); root.scrollTo(0, 0); });
     A.render();
     const splash = document.getElementById('splash');

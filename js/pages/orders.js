@@ -184,14 +184,16 @@
       { label: 'אישור הזמנה', text: `היי ${first}, תודה שהזמנת מ${biz}! 🤎 ההזמנה מאושרת.\n${items}\nמועד: ${when} (${o.method === 'delivery' ? 'משלוח' : 'איסוף'})${o.method !== 'delivery' && pickup ? `\nכתובת לאיסוף: ${pickup}` : ''}\nסה״כ: ${U.money(t.total)}${t.paid ? `\nשולם: ${U.money(t.paid)}` : ''}${pay && t.balance ? `\n${pay}` : ''}\nמחכה לאפות בשבילך!` },
       { label: 'ההזמנה מוכנה', text: `היי ${first}, ההזמנה שלך מ${biz} מוכנה ${o.method === 'delivery' ? 'ויוצאת אלייך' : 'לאיסוף'} 🥐${t.balance ? `\nיתרה לתשלום: ${U.money(t.balance)}` : ''}` },
       { label: 'תזכורת תשלום', text: o.payDue > 0 && t.paid < o.payDue ? `היי ${first}, כדי לאשר את הזמנה #${o.num} חסר${o.payMode === 'full' ? ' התשלום' : 'ה המקדמה'} של ${U.money(o.payDue - t.paid)}.${(A.state.form.pay || {}).bit || A.state.settings.phone ? ` ביט: ${(A.state.form.pay || {}).bit || A.state.settings.phone}` : ''}${A.safeUrl((A.state.form.pay || {}).paybox) ? `\nפייבוקס: ${A.safeUrl(A.state.form.pay.paybox)}` : ''}\nתודה! 🤎` : `היי ${first}, תזכורת עדינה — נשארה יתרה של ${U.money(t.balance)} על הזמנה #${o.num}. אפשר בביט/פייבוקס. תודה! 🤎` },
-      { label: 'בקשת חוות דעת', text: `היי ${first}, מקווה שנהניתם! 🤎 אשמח לשמוע איך היה — ואם אהבת, תמונה או המלצה קטנה עוזרות לי מאוד.` },
+      { label: 'בקשת חוות דעת', text: `היי ${first}, מקווה שנהניתם! 🤎 אשמח לשמוע איך היה — ואם אהבת, תמונה או המלצה קטנה עוזרות לי מאוד.${A.fb && A.fb.ready() ? `\nכאן זה לוקח פחות מדקה: ${A.fb.link(o.num)}` : ''}` },
       ...(A.state.settings.cancellationPolicy ? [{ label: 'מדיניות ביטולים', text: A.state.settings.cancellationPolicy }] : [])
     ].filter(m => m.label !== 'תזכורת תשלום' || t.balance > 0);
   }
 
-  function printSlip(o) {
+  async function printSlip(o) {
     const t = C.orderTotals(o), w = root.open('', '_blank');
     if (!w) return A.toast('הדפדפן חסם חלון — אפשרי חלונות קופצים');
+    // QR למשוב שמחובר להזמנה הזו (כשטופס המשוב פתוח)
+    let qr = null; try { qr = A.fb ? await A.fb.orderQr(o) : null; } catch (e) { }
     w.document.write(`<html dir="rtl" lang="he"><head><meta charset="utf-8"><title>הזמנה ${o.num}</title><style>body{font-family:Assistant,Arial;max-width:380px;margin:20px auto;color:#2f1d11}h2{font-family:'Frank Ruhl Libre',serif;color:#3b2d1e;margin:6px 0}td{padding:4px 0}.n{text-align:left}hr{border:0;border-top:1px dashed #a8805a}</style></head><body>
       <div style="text-align:center"><img src="${new URL('assets/logo.png', location.href)}" style="width:150px"></div>
       <h2>הזמנה #${o.num}</h2><div>${U.esc(o.customerName)} · <span dir="ltr">${U.esc(o.phone || '')}</span></div>
@@ -200,7 +202,8 @@
       ${t.discount ? `<tr><td>הנחה</td><td class="n">−${U.money(t.discount)}</td></tr>` : ''}${t.delivery ? `<tr><td>משלוח</td><td class="n">${U.money(t.delivery)}</td></tr>` : ''}
       <tr><td><b>סה״כ</b></td><td class="n"><b>${U.money(t.total)}</b></td></tr><tr><td>שולם</td><td class="n">${U.money(t.paid)}</td></tr>${t.balance ? `<tr><td>יתרה</td><td class="n">${U.money(t.balance)}</td></tr>` : ''}</table><hr>
       ${o.allergies ? `<p><b>רגישויות:</b> ${U.esc(o.allergies)}</p>` : ''}${o.notes ? `<p>${U.esc(o.notes)}</p>` : ''}
-      <p style="text-align:center;color:#8a7462">תודה שבחרת ב${U.esc(A.state.settings.businessName)} 🤎</p></body></html>`);
+      <p style="text-align:center;color:#8a7462">תודה שבחרת ב${U.esc(A.state.settings.businessName)} 🤎</p>
+      ${qr ? `<div style="text-align:center;border-top:1px dashed #a8805a;padding-top:10px"><b style="font-family:'Frank Ruhl Libre',serif;font-size:1.2em;color:#3b2d1e">איך היה?</b><div style="color:#8a7462;font-size:.9em">סרקי ושתפי אותנו — פחות מדקה</div><img src="${qr.img}" style="width:120px;height:120px;margin-top:6px" alt=""></div>` : ''}</body></html>`);
     w.document.close(); setTimeout(() => { try { w.focus(); w.print(); } catch (e) { } }, 500);
   }
 

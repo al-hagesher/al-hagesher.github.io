@@ -131,7 +131,22 @@
     days: { 0: { on: false, from: '09:00', to: '18:00' }, 1: { on: false, from: '09:00', to: '18:00' }, 2: { on: false, from: '09:00', to: '18:00' }, 3: { on: false, from: '09:00', to: '18:00' }, 4: { on: true, from: '10:00', to: '19:00' }, 5: { on: true, from: '08:00', to: '13:00' }, 6: { on: false, from: '20:00', to: '22:00' } },
     delivery: { on: false, fee: 20, freeAbove: 0, note: '' },
     pay: { mode: 'deposit', pct: 50, bit: '', bitLink: '', paybox: '', hours: 24 },
-    products: {}, customProducts: [], order: [], catOrder: []
+    products: {}, customProducts: [], order: [], catOrder: [],
+    feedback: A.feedbackDefaults()
+  });
+  // טופס משוב ללקוחות (QR על ההזמנות). שאלת הדירוג הראשונה היא הדירוג הכללי.
+  A.feedbackDefaults = () => ({
+    on: true, title: 'איך היה? 🤍', intro: 'נשמח לשמוע — זה לוקח פחות מדקה, וכל תשובה עוזרת לנו להשתפר.',
+    thanks: 'תודה רבה! קראנו כל מילה 🤍', reviewLink: '', photos: true,
+    questions: [
+      { id: 'q1', type: 'rating', label: 'איך היה בסך הכול?', required: true },
+      { id: 'q2', type: 'rating', label: 'הטעם' },
+      { id: 'q3', type: 'rating', label: 'המראה והאריזה' },
+      { id: 'q4', type: 'rating', label: 'תהליך ההזמנה' },
+      { id: 'q5', type: 'rating', label: 'עמידה בזמנים (איסוף / משלוח)' },
+      { id: 'q6', type: 'text', label: 'מה הכי אהבת?' },
+      { id: 'q7', type: 'text', label: 'מה היה אפשר לעשות טוב יותר?' }
+    ]
   });
 
   /* ---------- מצב ברירת מחדל ---------- */
@@ -154,7 +169,7 @@
 תודה על ההבנה!
 על הגשר — מאפים | מתוקים | ומעבר`
     },
-    ingredients: [], recipes: [], orders: [], expenses: [], recurring: [], coupons: [],
+    ingredients: [], recipes: [], orders: [], expenses: [], recurring: [], coupons: [], feedback: [],
     customers: {}, // הערות ופרטים נוספים לפי מפתח טלפון
     form: A.formDefaults(),
     wheel: { areas: A.WHEEL_AREAS.map(a => a.name), entries: [] },
@@ -187,7 +202,7 @@
     s = Object.assign(d, s || {});
     s.settings = Object.assign(A.defaults().settings, s.settings || {});
     s.wheel = Object.assign(A.defaults().wheel, s.wheel || {});
-    ['ingredients', 'recipes', 'orders', 'expenses', 'recurring', 'coupons'].forEach(k => { if (!Array.isArray(s[k])) s[k] = []; });
+    ['ingredients', 'recipes', 'orders', 'expenses', 'recurring', 'coupons', 'feedback'].forEach(k => { if (!Array.isArray(s[k])) s[k] = []; });
     if (!s.customers || typeof s.customers !== 'object') s.customers = {};
     const fd = A.formDefaults();
     // מינימום כמות הוא שדה חדש: בטופס קיים שלא הוגדר בו — 4 סופגניות (כפי שבעלת העסק ביקשה), וניתן לשינוי במסך הטופס
@@ -207,6 +222,9 @@
     if (!Array.isArray(s.form.customProducts)) s.form.customProducts = [];
     if (!Array.isArray(s.form.order)) s.form.order = [];
     if (!Array.isArray(s.form.catOrder)) s.form.catOrder = [];
+    const fbd = A.feedbackDefaults();
+    s.form.feedback = Object.assign(fbd, s.form.feedback && typeof s.form.feedback === 'object' ? s.form.feedback : {});
+    if (!Array.isArray(s.form.feedback.questions)) s.form.feedback.questions = fbd.questions;
     return s;
   };
   A.load = async () => {

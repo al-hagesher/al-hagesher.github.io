@@ -343,7 +343,7 @@
     const before = { orders: U.clone(A.state.orders.map(o => ({ id: o.id, items: o.items }))), idx: A.state.recipes.indexOf(r), product: A.state.form.products[r.id] };
     A.state.orders.forEach(o => o.items.forEach(i => { if (i.recipeId === r.id) { const rc = C.recipeCost(r); i.unitCost = rc.directPerUnit; i.recipeId = null; } }));
     A.state.recipes = A.state.recipes.filter(x => x.id !== r.id);
-    if (r.library) { A.state.deletedLibrary = A.state.deletedLibrary || []; if (!A.state.deletedLibrary.includes(r.id)) A.state.deletedLibrary.push(r.id); }
+    if (r.library || String(r.id).startsWith('lib-')) { A.state.deletedLibrary = A.state.deletedLibrary || []; if (!A.state.deletedLibrary.includes(r.id)) A.state.deletedLibrary.push(r.id); }
     if (A.state.form && A.state.form.products) delete A.state.form.products[r.id];
     A.save(); A.go('recipes');
     A.undoToast(`"${r.name}" נמחק`, () => {

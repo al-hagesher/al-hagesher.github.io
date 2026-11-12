@@ -2,7 +2,7 @@
 const fs = require('fs'), path = require('path'), vm = require('vm'), assert = require('assert');
 const ctx = { console, Intl, TextEncoder, TextDecoder, btoa: s => Buffer.from(s, 'binary').toString('base64'), atob: s => Buffer.from(s, 'base64').toString('binary') };
 ctx.window = ctx; vm.createContext(ctx);
-['js/core.js', 'js/seed.js', 'js/library.js', 'js/sync.js', 'js/pages/production.js', 'tests/demo-fixture.js', 'js/video-plan.js', 'js/video-analyze.js', 'js/music.js', 'js/receipts.js'].forEach(f => vm.runInContext(fs.readFileSync(path.join(__dirname, '..', f), 'utf8'), ctx, { filename: f }));
+['js/core.js', 'js/seed.js', 'js/library.js', 'js/sync.js', 'js/pages/production.js', 'tests/demo-fixture.js', 'js/video-plan.js', 'js/video-analyze.js', 'js/video-voice.js', 'js/music.js', 'js/receipts.js'].forEach(f => vm.runInContext(fs.readFileSync(path.join(__dirname, '..', f), 'utf8'), ctx, { filename: f }));
 const A = ctx.App, U = A.util, C = A.calc;
 let n = 0; const t = (name, fn) => { fn(); n++; console.log('✓', name); };
 const near = (a, b, eps = 0.01, msg) => assert.ok(Math.abs(a - b) <= eps, `${msg || ''} expected ${b}, got ${a}`);
@@ -435,6 +435,48 @@ t('עריכת סרטונים: מזהה מה לחתוך, מה להאיץ ומה �
   // חיתוכים לא חוזרים על אותו קטע כשיש מספיק חומר
   const p15 = A.planEdit(clips, { target: 15, style: 'calm' }), b15 = p15.segments.filter(s => s.role === 'body' && s.clip === 0).sort((x, y) => x.start - y.start);
   for (let k = 1; k < b15.length; k++) assert.ok(b15[k].start >= b15[k - 1].start + b15[k - 1].dur * b15[k - 1].speed - 0.05, 'חיתוכים חופפים: ' + JSON.stringify(b15));
+});
+
+t('קריינות: תזמון כל מילה לפי הקול, שורות כתוביות, ותמונות לסיום', () => {
+  const V = A.voice, sr = 16000;
+  // "דיבור" סינתטי: שלוש מילים רצופות (עם שקעים קצרצרים בין מילים), הפסקה, ועוד שתי מילים
+  const text = 'סופגניות פיסטוק טריות. מחר בבוקר';
+  const truth = [[0.5, 1.244], [1.244, 1.815], [1.815, 2.3], [2.9, 3.4], [3.4, 4.0]];
+  const data = new Float32Array(Math.round(4.6 * sr));
+  let seed = 3; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647 - 0.5;
+  for (let i = 0; i < data.length; i++) {
+    const t = i / sr, inWord = truth.some(([a, b]) => t >= a && t < b), dip = truth.some(([a]) => Math.abs(t - a) < 0.025 && a > 0.6 && a < 2.4);
+    data[i] = rnd() * (inWord && !dip ? 0.5 : 0.004);
+  }
+  const buf = { sampleRate: sr, length: data.length, numberOfChannels: 1, getChannelData: () => data };
+  const segs = V.speechSegments(V.envelope(buf));
+  assert.strictEqual(segs.length, 2, 'שני קטעי דיבור (ההפסקה זוהתה, השקעים הקצרים לא): ' + JSON.stringify(segs));
+  near(segs[0].a, 0.5, 0.03); near(segs[0].b, 2.3, 0.03); near(segs[1].a, 2.9, 0.03); near(segs[1].b, 4.0, 0.03);
+  const words = V.align(text, segs, 4.6);
+  assert.strictEqual(words.length, 5);
+  words.forEach((w, k) => { near(w.s, truth[k][0], 0.12, `התחלת "${w.w}": ${w.s}`); near(w.e, truth[k][1], 0.12, `סוף "${w.w}": ${w.e}`); });
+  for (let k = 1; k < words.length; k++) assert.ok(words[k].s >= words[k - 1].e - 1e-9, 'מילים לפי הסדר');
+  // עם עוגנים מזיהוי הדיבור — אותה תוצאה
+  const anchored = V.align(text, segs, 4.6, [{ text: 'סופגניות פיסטוק טריות.', t0: 1.0 }, { text: 'מחר בבוקר', t0: 3.3 }]);
+  near(anchored[3].s, 2.9, 0.1, 'המשפט השני מתחיל אחרי ההפסקה');
+  // שורות: נשברות בסוף משפט ובהפסקה, ולא יותר מ־3 מילים בסגנון הקצבי
+  const lines = V.lines(words, V.LOOKS.soft.maxWords, V.LOOKS.soft.maxChars);
+  assert.strictEqual(JSON.stringify(lines.map(l => l.words.length)), '[3,2]', 'שבירה בסוף משפט');
+  const popL = V.lines(words, V.LOOKS.pop.maxWords, V.LOOKS.pop.maxChars);
+  assert.ok(popL.every(l => l.words.length <= 3 && l.words.map(w => w.w).join(' ').length <= 18), 'בסגנון הבולט — שורות קצרות שנכנסות במסך');
+  assert.ok(lines[0].e <= lines[1].s, 'שורות לא חופפות');
+  // עריכת טקסט של שורה — המילים מתוזמנות מחדש בתוך גבולות השורה
+  const re = V.retimeLine('מחר בבוקר מוקדם', segs, lines[1].s, lines[1].e);
+  assert.strictEqual(re.length, 3); assert.ok(re[0].s >= lines[1].s - 1e-9 && re[2].e <= lines[1].e + 1e-9);
+  assert.strictEqual(V.lookFor('rhythm'), 'pop'); assert.strictEqual(V.lookFor('calm'), 'soft');
+  // תמונות לסיום: אחרי החשיפה, והאורך הכולל נשמר
+  const clips = [{ duration: 12 }, { duration: 8 }, { duration: 9, hero: true }];
+  const p = A.planEdit(clips, { target: 30, style: 'calm', photos: 3 });
+  near(p.total, 30, 0.06);
+  assert.strictEqual(JSON.stringify(p.segments.slice(-3).map(s => s.photo)), '[0,1,2]');
+  assert.strictEqual(p.segments[p.segments.length - 4].role, 'reveal');
+  const only = A.planEdit([], { target: 15, style: 'rhythm', photos: 4 });
+  near(only.total, 15, 0.06); assert.strictEqual(only.segments.length, 4);
 });
 
 t('קבלות: פענוח, התאמה למצרכים, מחיר ממוצע, מלאי וביטול', () => {

@@ -26,10 +26,13 @@
     return v;
   }
   // ציור "כיסוי" (כמו object-fit: cover) עם זום ומרכז
-  function drawCover(ctx, v, W, H, zoom) {
-    const vw = v.videoWidth || W, vh = v.videoHeight || H, s = Math.max(W / vw, H / vh) * zoom;
-    const dw = vw * s, dh = vh * s; ctx.drawImage(v, (W - dw) / 2, (H - dh) / 2, dw, dh);
+  // (גם לתמונות: pan = תנועה עדינה לצד, p = התקדמות 0..1)
+  function drawCover(ctx, v, W, H, zoom, pan, p) {
+    const vw = v.videoWidth || v.naturalWidth || W, vh = v.videoHeight || v.naturalHeight || H, s = Math.max(W / vw, H / vh) * zoom;
+    const dw = vw * s, dh = vh * s, dx = pan ? pan * (dw - W) * 0.5 * ((p || 0) - 0.5) : 0;
+    ctx.drawImage(v, (W - dw) / 2 + dx, (H - dh) / 2, dw, dh);
   }
+  const ready = el => el && (el.tagName === 'IMG' ? el.complete && el.naturalWidth > 0 : el.readyState >= 2);
   function grade(ctx, W, H, kind) {
     ctx.save();
     // גרדינג עדין — בלי הבזק כתום, רק חימום/קירור מתון
@@ -98,72 +101,100 @@
     const logo = await loadImg('assets/logo-cream.png');
     // קליפים: נגן נפרד לכל קליפ (נטען מראש) — מעברים חלקים בלי מסך שחור
     // שני נגנים לכל קליפ: בזמן שאחד מנגן, השני כבר מחכה על הקטע הבא — חיתוך נקי בלי המתנה לחיפוש
-    const used = new Set(plan.segments.map(s => s.clip));
+    const used = new Set(plan.segments.filter(s => s.photo == null).map(s => s.clip));
     const pairs = await Promise.all(clips.map((c, k) => used.has(k) ? Promise.all([makeVideo(c.url), makeVideo(c.url)]) : Promise.resolve(null)));
-    const uses = {}; const segEl = plan.segments.map(s => { uses[s.clip] = (uses[s.clip] || 0) + 1; return pairs[s.clip][(uses[s.clip] - 1) % 2]; });
+    const photos = await Promise.all((opts.photos || []).map(p => loadImg(p.url)));
+    const uses = {}; const segEl = plan.segments.map(s => { if (s.photo != null) return photos[s.photo] || null; uses[s.clip] = (uses[s.clip] || 0) + 1; return pairs[s.clip][(uses[s.clip] - 1) % 2]; });
     const vids = pairs.flat().filter(Boolean);
     // אודיו
     const AC = root.AudioContext || root.webkitAudioContext, ac = opts.audioContext || new AC();
     if (ac.state === 'suspended') try { await Promise.race([ac.resume(), new Promise(r => setTimeout(r, 600))]); } catch (e) { } // בלי לחיצה הדפדפן לא מפעיל אודיו — לא נתקעים
     const dest = ac.createMediaStreamDestination();
+    // כל הצלילים עוברים דרך out: להקלטה, ובתצוגה מקדימה — גם לרמקולים
+    const out = ac.createGain(); out.connect(dest); if (opts.preview) out.connect(ac.destination);
     // ערוץ שקט קבוע: בלי זה, כשאין מוזיקה וצליל מקורי, הקלטת ה-MP4 נעצרת אחרי שנייה וחצי
     const silent = ac.createConstantSource ? ac.createConstantSource() : ac.createOscillator(); const sg = ac.createGain(); sg.gain.value = 0.00001;
     silent.connect(sg).connect(dest); silent.start();
-    let musicSrc = null, musicGain = null;
+    let musicSrc = null, musicGain = null, voiceSrc = null;
     if (opts.musicUrl) {
       try {
         const buf = await ac.decodeAudioData(await (await fetch(opts.musicUrl)).arrayBuffer());
         musicSrc = ac.createBufferSource(); musicSrc.buffer = buf; musicSrc.loop = buf.duration < plan.total;
-        musicGain = ac.createGain(); musicGain.gain.value = 0; musicSrc.connect(musicGain).connect(dest);
+        musicGain = ac.createGain(); musicGain.gain.value = 0; musicSrc.connect(musicGain).connect(out);
       } catch (e) { console.warn('music', e); }
+    }
+    // קריינות / הקלטה שלך
+    const vo = opts.voice;
+    if (vo && vo.url) {
+      try {
+        const buf = await ac.decodeAudioData(await (await fetch(vo.url)).arrayBuffer());
+        voiceSrc = ac.createBufferSource(); voiceSrc.buffer = buf; const vg = ac.createGain(); vg.gain.value = vo.vol ?? 1; voiceSrc.connect(vg).connect(out);
+      } catch (e) { console.warn('voice', e); }
     }
     const origGain = new Map();
     if (opts.keepOriginal) vids.forEach(v => {
-      try { v.muted = false; const g = ac.createGain(); g.gain.value = 0; ac.createMediaElementSource(v).connect(g).connect(dest); origGain.set(v, g); } catch (e) { v.muted = true; }
+      try { v.muted = false; const g = ac.createGain(); g.gain.value = 0; ac.createMediaElementSource(v).connect(g).connect(out); origGain.set(v, g); } catch (e) { v.muted = true; }
     });
-    const stream = new MediaStream([...canvas.captureStream(30).getVideoTracks(), ...dest.stream.getAudioTracks()]);
     const mime = pickMime();
-    const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: opts.hq ? 10e6 : 6e6, audioBitsPerSecond: 160000 });
-    const chunks = []; rec.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
-    const stopped = once(rec, 'stop');
+    const rec = opts.preview ? null : new MediaRecorder(new MediaStream([...canvas.captureStream(30).getVideoTracks(), ...dest.stream.getAudioTracks()]), { mimeType: mime, videoBitsPerSecond: opts.hq ? 10e6 : 6e6, audioBitsPerSecond: 160000 });
+    const chunks = []; if (rec) rec.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
+    const stopped = rec ? once(rec, 'stop') : Promise.resolve();
 
     // לוח זמנים מוחלט
     const segs = plan.segments; let t0 = 0; const times = segs.map(s => { const r = { from: t0, to: t0 + s.dur }; t0 += s.dur; return r; });
     const total = plan.total, endFrom = t0;
-    await seek(segEl[0], segs[0].start);
-    if (segEl[1]) await seek(segEl[1], segs[1].start);
+    const isVid = el => el && el.tagName === 'VIDEO';
+    if (isVid(segEl[0])) await seek(segEl[0], segs[0].start);
+    if (isVid(segEl[1])) await seek(segEl[1], segs[1].start);
     // קטע ראשון מוכן — מתחילים
-    rec.start(250);
+    if (rec) rec.start(250);
     const startAt = performance.now(); // לרישום בלבד
-    if (musicSrc) { musicSrc.start(); const now = ac.currentTime, mv = opts.musicVol ?? 0.8; musicGain.gain.setValueAtTime(0, now); musicGain.gain.linearRampToValueAtTime(mv, now + 0.6); }
+    const mv = opts.musicVol ?? 0.8, t0a = ac.currentTime;
+    if (musicSrc) {
+      musicSrc.start(); musicGain.gain.setValueAtTime(0, t0a); musicGain.gain.linearRampToValueAtTime(mv, t0a + 0.6);
+      // "דאקינג": כשמדברים — המוזיקה יורדת, בהפסקות — חוזרת. לפי קטעי הדיבור שזוהו בהקלטה
+      if (vo && vo.segs && voiceSrc) vo.segs.forEach(sg2 => {
+        const a = t0a + (vo.offset || 0) + sg2.a, b = t0a + (vo.offset || 0) + sg2.b; if (a < t0a + 0.6) return;
+        musicGain.gain.setTargetAtTime(mv * 0.28, a - 0.12, 0.06); musicGain.gain.setTargetAtTime(mv, b + 0.25, 0.25);
+      });
+    }
+    if (voiceSrc) voiceSrc.start(t0a + Math.max(0, vo.offset || 0));
 
     let cur = -1, playing = null;
     const log = A._vlog = [];
     const startSeg = async i => {
       const s = segs[i], v = segEl[i];
+      if (!isVid(v)) { // תמונה: עוצרים את הנגן הקודם אחרי המעבר
+        if (playing) { const pv = playing; const g = origGain.get(pv); if (g) g.gain.value = 0; setTimeout(() => { if (pv !== playing) pv.pause(); }, (s.transDur || 0) * 1000 + 50); }
+        playing = null; return;
+      }
       log.push({ i, clip: s.clip, at: +((performance.now() - startAt) / 1000).toFixed(2), rs: v.readyState, ct: +v.currentTime.toFixed(2), want: s.start, paused: v.paused });
       if (playing && playing !== v) { const pv = playing; const g = origGain.get(pv); if (g) g.gain.value = 0; setTimeout(() => { if (pv !== playing) pv.pause(); }, (s.trans === 'fade' ? s.transDur : 0) * 1000 + 50); }
       if (Math.abs(v.currentTime - s.start) > 0.08) await seek(v, s.start);
       v.playbackRate = s.speed;
-      const og = origGain.get(v); if (og) og.gain.value = s.speed > 1.05 || s.speed < 0.95 ? 0.25 : 0.9;
+      // צליל מקורי: חלש כשהמהירות שונה, וחלש מאוד כשיש קריינות
+      const og = origGain.get(v); if (og) og.gain.value = (s.speed > 1.05 || s.speed < 0.95 ? 0.25 : 0.9) * (voiceSrc ? 0.2 : 1);
       try { await v.play(); } catch (e) { v.muted = true; try { await v.play(); } catch (e2) { } }
       playing = v;
       // מכינים מראש את הקטע הבא בנגן שלו
-      const n = segs[i + 1], nv = segEl[i + 1]; if (n && nv && nv !== v && Math.abs(nv.currentTime - n.start) > 0.05) { setTimeout(() => { if (nv !== playing) { nv.pause(); nv.currentTime = n.start; } }, (s.trans === 'fade' ? s.transDur : 0) * 1000 + 120); }
+      const n = segs[i + 1], nv = segEl[i + 1]; if (n && isVid(nv) && nv !== v && Math.abs(nv.currentTime - n.start) > 0.05) { setTimeout(() => { if (nv !== playing) { nv.pause(); nv.currentTime = n.start; } }, (s.trans === 'fade' ? s.transDur : 0) * 1000 + 120); }
     };
 
     // שעון לפי פריימים: אם המכשיר נתקע לרגע, ציר הזמן מחכה ולא מדלג על תוכן
-    let t = 0, last = performance.now(), paused = false;
+    let t = 0, last = performance.now(), paused = false, lastAc = ac.currentTime, lastAcWall = performance.now();
     const onVis = () => {
-      if (document.visibilityState === 'hidden' && !paused) { paused = true; try { rec.pause(); } catch (e) { } if (playing) playing.pause(); try { ac.suspend(); } catch (e) { } }
-      else if (document.visibilityState === 'visible' && paused) { paused = false; last = performance.now(); try { rec.resume(); } catch (e) { } try { ac.resume(); } catch (e) { } if (playing) playing.play().catch(() => { }); }
+      if (document.visibilityState === 'hidden' && !paused) { paused = true; try { rec && rec.pause(); } catch (e) { } if (playing) playing.pause(); try { ac.suspend(); } catch (e) { } }
+      else if (document.visibilityState === 'visible' && paused) { paused = false; last = performance.now(); try { rec && rec.resume(); } catch (e) { } try { ac.resume(); } catch (e) { } if (playing) playing.play().catch(() => { }); }
     };
     document.addEventListener('visibilitychange', onVis);
     await new Promise(resolve => {
       const frame = async () => {
         if (signal.cancelled) { resolve(); return; }
         const now = performance.now();
-        if (!paused) t += Math.min(0.25, (now - last) / 1000);
+        // שעון ראשי = שעון האודיו (זה גם הזמן של הקובץ המוקלט): קול, כתוביות, מוזיקה ותמונה נשארים מסונכרנים גם כשהמכשיר נתקע לרגע.
+        // אם האודיו לא רץ (נחסם בדפדפן) — שעון לפי פריימים, כמו קודם
+        const acT = ac.currentTime; if (acT > lastAc + 1e-4) { lastAc = acT; lastAcWall = now; }
+        if (!paused) t = ac.state === 'running' && now - lastAcWall < 600 ? Math.max(t, acT - t0a) : t + Math.min(0.25, (now - last) / 1000);
         last = now;
         if (t >= total) { resolve(); return; }
         let i = times.findIndex(x => t < x.to); if (i < 0) i = segs.length;
@@ -173,10 +204,10 @@
           const s = segs[i], tm = times[i], p = (t - tm.from) / s.dur, v = segEl[i];
           const zoom = s.zoomFrom + (s.zoomTo - s.zoomFrom) * ease(Math.min(1, Math.max(0, p)));
           let z = zoom; if (s.trans === 'punch' && t - tm.from < 0.2) z *= 1 + 0.08 * (1 - (t - tm.from) / 0.2);
-          if (v.readyState >= 2) drawCover(ctx, v, W, H, z); else if (log.length < 300) log.push({ stall: i, at: +t.toFixed(2), rs: v.readyState });
+          if (ready(v)) drawCover(ctx, v, W, H, z, s.pan, p); else if (log.length < 300) log.push({ stall: i, at: +t.toFixed(2), rs: v && v.readyState });
           // מעבר דהייה מהקטע הקודם
           if (s.trans === 'fade' && i > 0 && t - tm.from < s.transDur) {
-            const pv = segEl[i - 1]; if (pv !== v && pv.readyState >= 2) { ctx.save(); ctx.globalAlpha = 1 - (t - tm.from) / s.transDur; drawCover(ctx, pv, W, H, segs[i - 1].zoomTo); ctx.restore(); }
+            const pv = segEl[i - 1]; if (pv !== v && ready(pv)) { ctx.save(); ctx.globalAlpha = 1 - (t - tm.from) / s.transDur; drawCover(ctx, pv, W, H, segs[i - 1].zoomTo, segs[i - 1].pan, 1); ctx.restore(); }
           }
           grade(ctx, W, H, S.grade);
           // הבזק קצר ועדין — לא "פוצץ" בכתום. ~0.1 שנייה של רקע שוקולדי בהיר חצי-שקוף.
@@ -188,6 +219,8 @@
           // מעבר רך אל מסך הסיום
           if (i === segs.length - 1 && plan.endCard && tm.to - t < 0.35) { ctx.fillStyle = `rgba(38,24,14,${1 - (tm.to - t) / 0.35})`; ctx.fillRect(0, 0, W, H); }
         }
+        // כתוביות מההקלטה — מעל הכל, גם על מסך הסיום אם עוד מדברים
+        const cap = opts.captions; if (cap && cap.lines && cap.lines.length && A.voice) A.voice.draw(ctx, W, H, cap.lines, t - (cap.offset || 0), cap.look, cap.pos);
         if (musicGain && t > total - 1.6 && !musicGain._fading) { musicGain._fading = true; const n = ac.currentTime; musicGain.gain.cancelScheduledValues(n); musicGain.gain.setValueAtTime(musicGain.gain.value, n); musicGain.gain.linearRampToValueAtTime(0, n + Math.max(0.3, total - t)); }
         onFrame && onFrame(Math.min(1, t / total));
         requestAnimationFrame(frame);
@@ -195,11 +228,11 @@
       requestAnimationFrame(frame);
     });
     document.removeEventListener('visibilitychange', onVis);
-    rec.stop(); await stopped;
-    try { musicSrc && musicSrc.stop(); silent.stop(); } catch (e) { }
+    if (rec) rec.stop(); await stopped;
+    try { musicSrc && musicSrc.stop(); voiceSrc && voiceSrc.stop(); silent.stop(); } catch (e) { }
     vids.forEach(v => { v.pause(); v.remove(); });
     try { ac.close(); } catch (e) { }
-    if (signal.cancelled) return null;
+    if (signal.cancelled || !rec) return null;
     const type = mime.split(';')[0];
     return { blob: new Blob(chunks, { type }), mime: type, ext: type.includes('mp4') ? 'mp4' : 'webm', width: W, height: H };
   };

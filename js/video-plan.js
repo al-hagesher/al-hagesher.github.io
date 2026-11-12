@@ -30,6 +30,7 @@
   };
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const r3 = v => Math.round(v * 1000) / 1000;
+  const photoSeg = (k, dur, S) => ({ photo: k, start: 0, dur: r3(dur), speed: 1, trans: 'fade', transDur: Math.min(0.45, dur * 0.3), zoomFrom: k % 2 ? 1.1 : 1.02, zoomTo: k % 2 ? 1.02 : 1.1, pan: k % 2 ? -1 : 1, role: 'photo', caption: '', why: 'תמונה מוגמרת' });
 
   /**
    * @param clips [{duration, hero?, caption?}]
@@ -38,7 +39,12 @@
    */
   function planEdit(clips, opts) {
     const S = STYLES[opts.style] || STYLES.calm;
-    const target = clamp(+opts.target || 30, 5, 180);
+    const fullTarget = clamp(+opts.target || 30, 5, 180);
+    // תמונות מוגמרות לסיום (אחרי חשיפת המוצר, לפני מסך הסיום): זמן קבוע לכל תמונה לפי הסגנון, עד 40% מהסרטון
+    const nPh = Math.max(0, Math.min(10, opts.photos | 0));
+    let phDur = nPh ? ({ calm: 2.4, rhythm: 1.3, recipe: 2, reveal: 2.2, cinematic: 2.8 }[opts.style] || 2) : 0;
+    if (nPh && nPh * phDur > fullTarget * 0.4) phDur = Math.max(0.8, fullTarget * 0.4 / nPh);
+    const target = fullTarget - nPh * phDur;
     const beat = opts.bpm ? 60 / opts.bpm : null;
     // ניתוח מילות מפתח מהתיאור — משפיע על דגשים בעריכה
     const desc = (opts.description || '').toLowerCase();
@@ -66,7 +72,12 @@
     const durW = m => !m || !autoSpeed ? 1 : m.kind === 'peak' ? 1.4 : m.kind === 'steady' ? 0.9 : m.kind === 'idle' ? 0.7 : 1;
     const q = (sec, beats) => beat ? Math.max(beat, Math.round(sec / beat) * beat) : sec; // יישור לביט
     const valid = clips.map((c, i) => ({ ...c, i })).filter(c => c.duration > 0.3);
-    if (!valid.length) return { segments: [], endCard: 0, total: 0, style: opts.style };
+    if (!valid.length) {
+      if (!nPh) return { segments: [], endCard: 0, total: 0, style: opts.style };
+      // רק תמונות — מצגת: כל הזמן מתחלק בין התמונות
+      const end = fullTarget >= 12 ? 2 : 1.2, d = r3(Math.max(0.8, (fullTarget - end) / nPh)), segs = Array.from({ length: nPh }, (_, k) => photoSeg(k, d, S));
+      return { segments: segs, endCard: r3(Math.max(end, fullTarget - d * nPh)), total: r3(fullTarget), style: opts.style, styleDef: S, hookText: '', hints: focusHints, summary: { slow: 0, fast: 0, analyzed: false, shortBy: 0 } };
+    }
     // בחירת hero חכמה: המשתמשת סימנה ⭐, או הקליפ הסטטי+בהיר ביותר (לפי ניתוח), או האחרון
     const chooseHero = () => {
       const starred = valid.find(c => c.hero); if (starred) return starred;
@@ -255,6 +266,8 @@
       hookText = words.length <= 7 ? firstLine : words.slice(0, 7).join(' ') + '…';
     }
     segs.forEach(s => { delete s.lim; delete s.own; if (s.role === 'body' && s.kind) s.why = why({ kind: s.kind }, s.speed); });
+    // 4. תמונות מוגמרות — אחרי החשיפה, עם זום ותנועה עדינה לסירוגין
+    for (let k = 0; k < nPh; k++) segs.push(photoSeg(k, phDur, S));
     // נספרים רק שינויי מהירות שנובעים מהתוכן (רגע שיא / תהליך ארוך) — לא האטה קלה בגלל מחסור בחומר
     const slow = segs.filter(s => s.kind === 'peak' && s.speed < 0.95), fast = segs.filter(s => (s.kind === 'steady' || s.kind === 'idle') && s.speed > 1.3);
     const summary = { slow: slow.length, fast: fast.length, analyzed: valid.some(c => c.analysis && c.analysis.moments), shortBy };

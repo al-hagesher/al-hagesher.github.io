@@ -649,3 +649,31 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: non
 .vt-sp { font-weight: 700; padding: 0 5px; border-radius: 4px; }
 .vt-sp.slow { background: #e3ebf3; color: #3f6188; }
 .vt-sp.fast { background: #f3e9d6; color: #8a6420; }
+
+/* ---------- סטודיו: תמונות לסיום, עורך ידני, כתוביות, הקלטה ---------- */
+.btn.xs { padding: 2px 8px; min-height: 26px; font-size: .8rem; border-radius: 6px; }
+.vp-photos { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 8px; margin-top: 10px; }
+.vp-ph { position: relative; border-radius: 10px; overflow: hidden; background: var(--sand); aspect-ratio: 3 / 4; }
+.vp-ph img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.vp-ph > span { position: absolute; top: 4px; right: 4px; background: rgba(38,24,14,.75); color: #fff; font-size: .7rem; font-weight: 700; padding: 0 6px; border-radius: 6px; }
+.vp-ph-b { position: absolute; inset: auto 0 0 0; display: flex; justify-content: space-between; background: linear-gradient(transparent, rgba(20,12,6,.65)); }
+.vp-ph-b .icon-btn { color: #fff; min-width: 28px; min-height: 28px; padding: 2px; }
+.vo-caps { margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--line); }
+.rec-dot { width: 16px; height: 16px; border-radius: 50%; background: #b3412f; margin: 0 auto 6px; animation: recPulse 1.2s ease-in-out infinite; }
+@keyframes recPulse { 50% { opacity: .35; transform: scale(.8); } }
+@media (prefers-reduced-motion: reduce) { .rec-dot { animation: none; } }
+.ve-row, .ce-row { display: flex; gap: 10px; align-items: flex-start; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.ve-th { position: relative; width: 48px; height: 64px; border-radius: 8px; overflow: hidden; background: var(--sand); flex: none; }
+.ve-th img { width: 100%; height: 100%; object-fit: cover; }
+.ve-th span { position: absolute; bottom: 2px; right: 2px; background: rgba(38,24,14,.75); color: #fff; font-size: .68rem; font-weight: 700; padding: 0 5px; border-radius: 5px; }
+.ve-main, .ce-main { flex: 1; min-width: 0; }
+.ve-ctl { display: flex; flex-wrap: wrap; gap: 6px 10px; margin-top: 6px; }
+.ve-ctl label { display: flex; flex-direction: column; gap: 2px; font-size: .78rem; color: var(--muted); width: 96px; }
+.ve-ctl label.ve-cap { flex: 1; min-width: 140px; }
+.ve-ctl input, .ve-ctl select { min-height: 34px; padding: 4px 8px; font-size: .9rem; }
+.ve-btns { display: flex; flex-direction: column; gap: 2px; }
+.ce-row input[data-text] { min-height: 38px; }
+.ce-ctl { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; margin-top: 4px; color: var(--muted); }
+.ce-ctl > span { display: inline-flex; align-items: center; gap: 4px; }
+.ce-t { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--brown-2, var(--brown)); }
+@media (max-width: 700px) { .ve-ctl label { width: calc(50% - 6px); } }

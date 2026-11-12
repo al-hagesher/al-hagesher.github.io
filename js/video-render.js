@@ -62,12 +62,12 @@
     ctx.restore();
   }
   // כיתוב שלב — "גלולה" חומה מעל אזור הכיתובים של אינסטגרם
-  function drawCaption(ctx, W, H, text, alpha) {
+  function drawCaption(ctx, W, H, text, alpha, yFrac = 0.6) {
     if (!text || alpha <= 0) return;
     ctx.save(); ctx.globalAlpha = alpha; ctx.direction = 'rtl'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     const size = Math.round(W * 0.058); ctx.font = `700 ${size}px "Assistant", sans-serif`;
     const lines = wrap(ctx, text, W * 0.78), lh = size * 1.25, w = Math.min(W * 0.86, Math.max(...lines.map(l => ctx.measureText(l).width)) + size * 1.4), h = lines.length * lh + size * 0.7;
-    const x = (W - w) / 2, y = H * 0.6 - h / 2, r = size * 0.6;
+    const x = (W - w) / 2, y = H * yFrac - h / 2, r = size * 0.6;
     ctx.fillStyle = 'rgba(42,30,19,0.85)'; ctx.beginPath();
     ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); ctx.fill();
     ctx.fillStyle = '#f7ecdc'; lines.forEach((l, k) => ctx.fillText(l, W / 2, y + size * 0.35 + lh / 2 + k * lh));
@@ -215,7 +215,7 @@
           // כותרת בשניות הראשונות
           if (t < 3) drawTitle(ctx, W, H, opts.title, t < 0.25 ? t / 0.25 : t > 2.5 ? (3 - t) / 0.5 : 1, S.text);
           // כיתוב שלב
-          if (s.caption) { const ct = t - tm.from, d = Math.min(s.dur, 2.2); drawCaption(ctx, W, H, s.caption, ct < 0.2 ? ct / 0.2 : ct > d - 0.25 ? Math.max(0, (d - ct) / 0.25) : 1); }
+          if (s.caption) { const ct = t - tm.from, d = Math.min(s.dur, 2.2); drawCaption(ctx, W, H, s.caption, ct < 0.2 ? ct / 0.2 : ct > d - 0.25 ? Math.max(0, (d - ct) / 0.25) : 1, opts.captions && opts.captions.pos === 'middle' ? 0.42 : 0.6); }
           // מעבר רך אל מסך הסיום
           if (i === segs.length - 1 && plan.endCard && tm.to - t < 0.35) { ctx.fillStyle = `rgba(38,24,14,${1 - (tm.to - t) / 0.35})`; ctx.fillRect(0, 0, W, H); }
         }

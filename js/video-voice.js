@@ -107,16 +107,23 @@
     const words = V.tokenize(text); if (!words.length) return [];
     const dur = duration || (segs.length ? segs[segs.length - 1].b + 0.2 : words.length * 0.4);
     const ph = (phrases || []).filter(p => p && p.text && V.tokenize(p.text).length && isFinite(p.t0));
-    // עוגנים רק אם הטקסט הוא בדיוק מה שזוהה (אם נערך — מתזמנים על כל ההקלטה)
+    // עוגנים רק אם הטקסט הוא בדיוק מה שזוהה (אם נערך — מתזמנים על כל ההקלטה).
+    // הזיהוי מאחר (חצי שנייה עד שתיים, תלוי ברשת) — לכן משפט מעוגן רק להפסקה אמיתית בקול שקרובה לזמן המשוער;
+    // משפט שאין לידו הפסקה מתמזג עם הקודם. ככה עיכוב ברשת לא מזיז מילים למקום הלא נכון
     if (ph.length > 1 && V.tokenize(ph.map(p => p.text).join(' ')).join(' ') === words.join(' ')) {
-      const starts = ph.map(p => { // תחילת משפט ≈ תחילת הדיבור שלפני שהטקסט הופיע (הזיהוי מאחר ב~0.5 שנייה)
-        const guess = Math.max(0, p.t0 - 0.6), seg = segs.filter(s => s.a <= guess + 0.4).pop();
-        return seg ? Math.max(seg.a, Math.min(guess, seg.b)) : guess;
-      });
-      for (let k = 1; k < starts.length; k++) starts[k] = Math.max(starts[k], starts[k - 1] + 0.2);
-      const out = [];
-      ph.forEach((p, k) => out.push(...spread(V.tokenize(p.text), segs, starts[k], k < ph.length - 1 ? starts[k + 1] : dur)));
-      return out;
+      const gaps = []; for (let k = 1; k < segs.length; k++) if (segs[k].a - segs[k - 1].b >= 0.2) gaps.push({ a: segs[k - 1].b, b: segs[k].a });
+      const groups = [{ words: V.tokenize(ph[0].text), from: segs.length ? segs[0].a : 0 }];
+      for (let k = 1; k < ph.length; k++) {
+        const guess = ph[k].t0 - 0.8, prevFrom = groups[groups.length - 1].from;
+        const g = gaps.filter(x => x.b > prevFrom + 0.3 && Math.abs(x.b - guess) < 1.6).sort((x, y) => Math.abs(x.b - guess) - Math.abs(y.b - guess))[0];
+        if (g) groups.push({ words: V.tokenize(ph[k].text), from: g.b, gapA: g.a });
+        else groups[groups.length - 1].words.push(...V.tokenize(ph[k].text));
+      }
+      if (groups.length > 1) {
+        const last = segs.length ? segs[segs.length - 1].b : dur, out = [];
+        groups.forEach((g, k) => out.push(...spread(g.words, segs, g.from, k < groups.length - 1 ? groups[k + 1].gapA : last)));
+        return out;
+      }
     }
     const first = segs.length ? segs[0].a : 0, last = segs.length ? segs[segs.length - 1].b : dur;
     return spread(words, segs, first, last);
@@ -208,19 +215,19 @@
 
   /* ---------- הקלטה (דפדפן) ---------- */
   // מקליטה קול, ובמקביל מזהה דיבור (אם אפשר). onLevel(0..1) למד עוצמה, onText(טקסט עד עכשיו)
-  V.record = async ({ onLevel, onText } = {}) => {
+  V.record = async ({ onLevel, onText, recognize = true } = {}) => {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
     const mime = ['audio/webm;codecs=opus', 'audio/mp4', 'audio/webm', 'audio/ogg'].find(m => MediaRecorder.isTypeSupported(m)) || '';
     const rec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined), chunks = [];
     rec.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
     const AC = root.AudioContext || root.webkitAudioContext, ac = new AC(), an = ac.createAnalyser(); an.fftSize = 512;
-    ac.createMediaStreamSource(stream).connect(an);
+    ac.createMediaStreamSource(stream).connect(an); try { ac.resume(); } catch (e) { } // באייפון: בלי זה מד העוצמה תקוע
     const data = new Uint8Array(an.fftSize); let raf = 0;
     const meter = () => { an.getByteTimeDomainData(data); let m = 0; for (const v of data) m = Math.max(m, Math.abs(v - 128)); onLevel && onLevel(m / 128); raf = requestAnimationFrame(meter); };
     // זיהוי דיבור: כרום עוצר אחרי שתיקה — מפעילים מחדש. כל משפט נשמר עם הזמן שבו התחיל להופיע
-    const phrases = []; let sr = null, active = true, base = 0;
+    const phrases = []; let sr = null, active = true, base = 0, restarts = 0;
     const t0 = performance.now(), now = () => (performance.now() - t0) / 1000;
-    if (SR()) {
+    if (recognize && SR()) {
       try {
         sr = new (SR())(); sr.lang = 'he-IL'; sr.continuous = true; sr.interimResults = true; sr.maxAlternatives = 1;
         sr.onresult = e => {
@@ -230,18 +237,21 @@
           }
           onText && onText(phrases.filter(Boolean).map(p => p.text).join(' '));
         };
-        sr.onend = () => { if (!active) return; base = phrases.length; try { sr.start(); } catch (e) { } };
-        sr.onerror = e => { if (e.error === 'not-allowed' || e.error === 'service-not-allowed') { active = false; sr = null; } };
+        // כרום עוצר אחרי שתיקה — מפעילים מחדש (עם השהיה קטנה ומגבלה, כדי שבלי רשת זה לא ירוץ בלולאה)
+        sr.onend = () => { if (!active || !sr || ++restarts > 40) return; base = phrases.length; setTimeout(() => { if (active && sr) try { sr.start(); } catch (e) { } }, 250); };
+        // אין הרשאה / המיקרופון תפוס (קורה בחלק מהטלפונים כשמקליטים במקביל) — ממשיכים להקליט בלי זיהוי
+        sr.onerror = e => { if (['not-allowed', 'service-not-allowed', 'audio-capture', 'language-not-supported'].includes(e.error)) sr = null; };
         sr.start();
       } catch (e) { sr = null; }
     }
     rec.start(250); meter();
     return {
-      recognizing: () => !!sr,
+      recognizing: () => recognize && !!SR(),
       stop: async () => {
         active = false; cancelAnimationFrame(raf);
-        const stopped = new Promise(r => rec.onstop = r); rec.stop();
-        if (sr) { const ended = new Promise(r => { const t = setTimeout(r, 1500); sr.onend = () => { clearTimeout(t); r(); }; }); try { sr.stop(); } catch (e) { } await ended; }
+        // (עם מגבלת זמן — שלא ניתקע אם הדפדפן כבר עצר את ההקלטה בעצמו)
+        const stopped = rec.state === 'inactive' ? Promise.resolve() : new Promise(r => { rec.onstop = r; setTimeout(r, 3000); rec.stop(); });
+        if (sr) { const s = sr; sr = null; const ended = new Promise(r => { const t = setTimeout(r, 1500); s.onend = () => { clearTimeout(t); r(); }; }); try { s.stop(); } catch (e) { } await ended; }
         await stopped; stream.getTracks().forEach(t => t.stop()); try { ac.close(); } catch (e) { }
         const blob = new Blob(chunks, { type: (mime || 'audio/webm').split(';')[0] });
         return { blob, phrases: phrases.filter(p => p && p.text) };

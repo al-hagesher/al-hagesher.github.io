@@ -459,6 +459,11 @@ t('קריינות: תזמון כל מילה לפי הקול, שורות כתוב
   // עם עוגנים מזיהוי הדיבור — אותה תוצאה
   const anchored = V.align(text, segs, 4.6, [{ text: 'סופגניות פיסטוק טריות.', t0: 1.0 }, { text: 'מחר בבוקר', t0: 3.3 }]);
   near(anchored[3].s, 2.9, 0.1, 'המשפט השני מתחיל אחרי ההפסקה');
+  // זיהוי איטי (רשת חלשה): הטקסט מגיע באיחור של 1.5 ואפילו 4 שניות — התזמון עדיין לפי הקול
+  for (const lag of [1.5, 4]) {
+    const late = V.align(text, segs, 4.6, [{ text: 'סופגניות פיסטוק טריות.', t0: 1.0 + lag }, { text: 'מחר בבוקר', t0: 3.3 + lag }]);
+    late.forEach((w, k) => { near(w.s, truth[k][0], 0.12, `איחור ${lag}: התחלת "${w.w}"`); near(w.e, truth[k][1], 0.12, `איחור ${lag}: סוף "${w.w}"`); });
+  }
   // שורות: נשברות בסוף משפט ובהפסקה, ולא יותר מ־3 מילים בסגנון הקצבי
   const lines = V.lines(words, V.LOOKS.soft.maxWords, V.LOOKS.soft.maxChars);
   assert.strictEqual(JSON.stringify(lines.map(l => l.words.length)), '[3,2]', 'שבירה בסוף משפט');

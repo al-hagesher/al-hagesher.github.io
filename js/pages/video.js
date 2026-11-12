@@ -266,38 +266,56 @@
   function stopPreview() { if (previewAudio) { previewAudio.pause(); previewAudio = null; } }
 
   /* ---------- קריינות: הקלטה, קובץ, תמלול ---------- */
-  async function setVoice(blob, name, phrases) {
+  async function setVoice(blob, name, phrases, recognized) {
     A.toast('מנתחת את ההקלטה…');
     let info;
-    try { info = await V.load(blob); } catch (e) { A.toast('לא הצלחתי לקרוא את קובץ השמע'); return; }
+    try { info = await V.load(blob); } catch (e) { A.toast('לא הצלחתי לקרוא את קובץ השמע. נסי קובץ אחר (mp3, m4a, wav או סרטון).'); return; }
+    // הקלטה בלי דיבור — כנראה המיקרופון היה תפוס או חסום. לא מוסיפים קול ריק לסרטון
+    if (!info.segs.length) {
+      if (recognized) recognizeNext = false;
+      A.modal({ title: 'לא נשמע דיבור', size: 'narrow', body: `<p>${name === 'הקלטה' ? 'ההקלטה יצאה שקטה.' : 'בקובץ הזה לא נשמע דיבור.'}</p>${recognized ? '<p>בחלק מהטלפונים הכתיבה האוטומטית תופסת את המיקרופון. בהקלטה הבאה היא תהיה כבויה — ואת הטקסט מוסיפים אחרי ההקלטה, והתזמון יחושב לפי הקול.</p>' : '<p>כדאי לבדוק שהמיקרופון לא חסום בדפדפן ולנסות שוב.</p>'}`, foot: `${name === 'הקלטה' ? '<button class="btn" data-again>הקלטה מחדש</button>' : ''}<button class="btn ghost" data-close>סגירה</button>`, onMount: w => { const b = w.querySelector('[data-again]'); if (b) b.onclick = () => { A.closeModal(); setTimeout(openRecorder, 50); }; } });
+      return;
+    }
     if (st.voice) URL.revokeObjectURL(st.voice.url);
     const text = (phrases || []).map(p => p.text).join(' ').trim();
-    st.voice = { url: URL.createObjectURL(blob), name, duration: info.duration, segs: info.segs, buffer: info.buffer, phrases: phrases || [], text, lines: [], offset: 0, vol: 1, look: 'auto', pos: 'bottom', show: true, noRecog: phrases && !text };
+    st.voice = { url: URL.createObjectURL(blob), name, duration: info.duration, segs: info.segs, buffer: info.buffer, phrases: phrases || [], text, lines: [], offset: 0, vol: 1, look: 'auto', pos: 'bottom', show: true, noRecog: !!recognized && !text };
     if (text) st.voice.lines = V.build(text, info.segs, info.duration, phrases, lookKey());
     A.toast(text ? 'ההקלטה והכתוביות מוכנות 🎙️' : 'ההקלטה נוספה'); A.refresh();
   }
+  // בחלק מהטלפונים זיהוי הדיבור והמקליט "רבים" על המיקרופון — אם הקלטה יצאה שקטה, ההקלטה הבאה תהיה בלי זיהוי
+  let recognizeNext = true;
   function openRecorder() {
-    let ctl = null, t0 = 0, iv = 0, done = false;
+    let ctl = null, t0 = 0, iv = 0, done = false, closed = false;
+    const canRec = V.canRecognize();
     A.modal({
       title: 'הקלטת קריינות', size: 'narrow',
-      body: `<div style="text-align:center"><div class="rec-dot" id="recDot"></div><div id="recTime" style="font-size:2rem;font-weight:700;font-variant-numeric:tabular-nums">0:00</div>
+      body: `<div style="text-align:center"><div class="rec-dot" id="recDot" hidden></div><div id="recTime" style="font-size:2rem;font-weight:700;font-variant-numeric:tabular-nums">0:00</div>
         <div class="time-bar" style="height:10px;margin:10px 0"><i id="recLvl" style="width:0;background:var(--ok);transition:width .08s"></i></div>
-        <div id="recText" class="small" style="min-height:3.2em;text-align:start;background:var(--sand-2);border-radius:10px;padding:10px;line-height:1.7">${V.canRecognize() ? 'מתחילים לדבר — מה שתגידי ייכתב כאן' : 'מדברים בקצב רגיל. את הטקסט מוסיפים אחרי ההקלטה.'}</div>
-        <p class="small muted" style="margin:10px 0 0">חדר שקט, טלפון קרוב לפה. אפשר להקליט ארוך — הסרטון יתארך לפי ההקלטה.</p></div>`,
-      foot: `<button class="btn" data-stop disabled>⏹ סיום הקלטה</button><button class="btn ghost" data-close>ביטול</button>`,
-      onMount: async w => {
-        try {
-          ctl = await V.record({ onLevel: l => { const el = document.getElementById('recLvl'); if (el) el.style.width = Math.min(100, l * 160) + '%'; }, onText: t => { const el = document.getElementById('recText'); if (el) el.textContent = t; } });
-        } catch (err) { const el = document.getElementById('recText'); if (el) el.textContent = 'אין גישה למיקרופון. צריך לאשר הקלטה בדפדפן (סמל המנעול ליד הכתובת).'; return; }
-        t0 = performance.now(); iv = setInterval(() => { const s = (performance.now() - t0) / 1000, el = document.getElementById('recTime'); if (el) el.textContent = `${Math.floor(s / 60)}:${U.pad(Math.floor(s % 60))}`; }, 250);
-        const sb = w.querySelector('[data-stop]'); sb.disabled = false;
-        sb.onclick = async () => {
-          sb.disabled = true; sb.textContent = 'שומרת…'; clearInterval(iv); done = true;
-          const res = await ctl.stop(); A.closeModal();
-          await setVoice(res.blob, 'הקלטה', ctl.recognizing() ? res.phrases : []);
+        <div id="recText" class="small" style="min-height:3.2em;text-align:start;background:var(--sand-2);border-radius:10px;padding:10px;line-height:1.7">מדברים בקצב רגיל, בחדר שקט, הטלפון קרוב לפה. אפשר להקליט ארוך — הסרטון יתארך לפי ההקלטה.</div>
+        ${canRec ? `<label class="row small" style="gap:8px;margin-top:10px;justify-content:center"><input type="checkbox" id="recRecog" ${recognizeNext ? 'checked' : ''}> לכתוב בזמן ההקלטה את מה שאני אומרת</label>` : ''}</div>`,
+      foot: `<button class="btn" data-go>🎙️ התחלת הקלטה</button><button class="btn ghost" data-close>ביטול</button>`,
+      onMount: w => {
+        const go = w.querySelector('[data-go]');
+        go.onclick = async () => {
+          if (ctl) { // סיום
+            go.disabled = true; go.textContent = 'שומרת…'; clearInterval(iv); done = true;
+            const res = await ctl.stop(); A.closeModal();
+            await setVoice(res.blob, 'הקלטה', ctl.recognizing() ? res.phrases : null, ctl.recognizing());
+            return;
+          }
+          const box = w.querySelector('#recRecog'), recognize = !!(canRec && (!box || box.checked));
+          recognizeNext = recognize; go.disabled = true; if (box) box.disabled = true;
+          try {
+            ctl = await V.record({ recognize, onLevel: l => { const el = document.getElementById('recLvl'); if (el) el.style.width = Math.min(100, l * 160) + '%'; }, onText: t => { const el = document.getElementById('recText'); if (el) el.textContent = t; } });
+          } catch (err) { go.disabled = false; const el = document.getElementById('recText'); if (el) el.textContent = 'אין גישה למיקרופון. צריך לאשר הקלטה בדפדפן (סמל המנעול ליד הכתובת) ולנסות שוב.'; return; }
+          if (closed) { done = true; ctl.stop().catch(() => { }); return; } // החלון נסגר בזמן שחיכינו לאישור המיקרופון
+          document.getElementById('recDot').hidden = false;
+          const tx = document.getElementById('recText'); if (tx) tx.textContent = recognize ? 'מקליטה — מה שתגידי ייכתב כאן' : 'מקליטה…';
+          t0 = performance.now(); iv = setInterval(() => { const s = (performance.now() - t0) / 1000, el = document.getElementById('recTime'); if (el) el.textContent = `${Math.floor(s / 60)}:${U.pad(Math.floor(s % 60))}`; }, 250);
+          go.disabled = false; go.textContent = '⏹ סיום הקלטה';
         };
       },
-      onClose: () => { clearInterval(iv); if (ctl && !done) { done = true; ctl.stop().catch(() => { }); } }
+      onClose: () => { closed = true; clearInterval(iv); if (ctl && !done) { done = true; ctl.stop().catch(() => { }); } }
     });
   }
   async function autoTranscribe(btn) {
@@ -391,7 +409,8 @@
         <div class="ve-btns"><button class="icon-btn" data-mv="-1" aria-label="למעלה" ${i ? '' : 'disabled'}>▲</button><button class="icon-btn" data-mv="1" aria-label="למטה" ${i < e.segments.length - 1 ? '' : 'disabled'}>▼</button><button class="icon-btn" data-rm aria-label="מחיקת הקטע">${A.icon('trash')}</button></div></div>`;
     }).join('');
     const addOpts = () => [...st.clips.map((c, k) => [`c${k}`, `קליף ${k + 1} (${fmtDur(c.duration)})`]), ...st.photos.map((p, k) => [`p${k}`, `תמונה ${k + 1}`])];
-    const head = () => `<b>${fmtDur(planTotal(e))}</b> · ${e.segments.length} קטעים`;
+    const head = () => { const tot = planTotal(e), over = st.voice ? voiceEnd() + 0.6 - tot : 0;
+      return `<b>${fmtDur(tot)}</b> · ${e.segments.length} קטעים${over > 0.3 ? ` · <span class="badge warn">הקריינות ארוכה ב־${U.round(over, 1)} ש׳ — מסך הסיום יתארך כדי שהיא תיכנס. אפשר להאריך קטעים במקום</span>` : ''}`; };
     A.modal({
       title: 'עריכה ידנית', size: 'wide',
       body: `<p class="small muted" style="margin:0 0 10px">כאן הכל בידיים שלך: מאיזו שנייה בקליף, כמה זמן, באיזו מהירות, איזה כיתוב ובאיזה סדר. השינויים נשמרים מיד — אחר כך "תצוגה מקדימה" או "יצירה מחדש".</p>
@@ -440,7 +459,9 @@
   const finalPlan = mu => {
     const p = st.edit ? clone(st.edit) : autoPlan(mu); if (!p) return null;
     if (st.edit) p.total = planTotal(p);
-    if (!st.title && p.hookText) p.title = p.hookText;
+    // הקריינות לא נחתכת באמצע: אם היא ארוכה מהסרטון — מסך הסיום מתארך (עם הלוגו) עד שהיא נגמרת
+    const need = st.voice ? voiceEnd() + 0.6 : 0;
+    if (need > p.total) { p.endCard = U.round((+p.endCard || 0) + need - p.total, 3); p.total = U.round(need, 3); }
     return p;
   };
   function preview() {

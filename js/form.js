@@ -207,8 +207,8 @@
   }
   function notify(orders, claim) {
     const o = orders[0];
-    const msg = claim ? `${o.customerName} דיווחה ששילמה ב${o.payClaim.method || 'העברה'} — בדקי ואשרי את ההזמנה`
-      : orders.length === 1 ? `הזמנה חדשה מ${o.customerName} ל${U.relDay(o.date)} · ${U.money(C.orderTotals(o).total)}` : `${orders.length} הזמנות חדשות מהטופס`;
+    const msg = claim ? `${o.customerName} שלחה את ההזמנה ודיווחה ששילמה ב${o.payClaim.method || 'העברה'} — בדקי ואשרי`
+      : orders.length === 1 ? `הזמנה חדשה מ${o.customerName} ל${U.relDay(o.date)} · ${U.money(C.orderTotals(o).total)}${o.payDue > 0 && !o.payClaim ? ' · עוד לא שלחה (ממתינה לתשלום ולשליחה)' : ''}` : `${orders.length} הזמנות חדשות מהטופס`;
     A.toast('🛎️ ' + msg);
     try { const ctx = new (root.AudioContext || root.webkitAudioContext)(); [0, .18].forEach((t, i) => { const os = ctx.createOscillator(), g = ctx.createGain(); os.frequency.value = i ? 1046 : 784; os.connect(g); g.connect(ctx.destination); g.gain.setValueAtTime(.2, ctx.currentTime + t); g.gain.exponentialRampToValueAtTime(.001, ctx.currentTime + t + .35); os.start(ctx.currentTime + t); os.stop(ctx.currentTime + t + .4); }); } catch (e) { }
     try { if (root.Notification && Notification.permission === 'granted') new Notification('על הגשר', { body: msg, icon: 'assets/icon.png' }); } catch (e) { }
@@ -366,7 +366,7 @@
           <label class="field full"><span>קישור תשלום אישי בביט (מומלץ)</span><input type="url" dir="ltr" data-p="pay.bitLink" value="${U.esc(f.pay.bitLink || '')}" placeholder="https://…"><small>אם יש לך קישור תשלום מאפליקציית ביט — הדביקי אותו כאן, והכפתור "פתיחת ביט" בטופס יוביל ישר אלייך. בלי קישור: הכפתור פותח את אפליקציית ביט בטלפון של הלקוחה, והמספר שלך מועתק לה אוטומטית להדבקה.</small></label>
           <label class="field full"><span>קישור לתשלום בפייבוקס</span><input type="url" dir="ltr" data-p="pay.paybox" value="${U.esc(f.pay.paybox || '')}" placeholder="https://payboxapp.page.link/…"><small>יוצרים באפליקציית פייבוקס: "בקשת תשלום" ← "שיתוף קישור". אם ריק — יוצג רק ביט.</small></label>` : ''}
         </div>
-        <p class="small muted" style="margin:10px 0 0">${f.pay.mode === 'none' ? 'ההזמנות ייכנסו בלי דרישת תשלום.' : 'אחרי שליחת ההזמנה הלקוחה רואה את הסכום לתשלום וכפתורי ביט / פייבוקס, ולוחצת "שילמתי". ההזמנה נשארת "ממתינה לתשלום" עד שאת בודקת שהכסף נכנס ומאשרת — ואז נשלח לה אישור.'}</p>
+        <p class="small muted" style="margin:10px 0 0">${f.pay.mode === 'none' ? 'ההזמנות ייכנסו בלי דרישת תשלום.' : 'אחרי מילוי הטופס הלקוחה רואה את הסכום לתשלום וכפתורי ביט / פייבוקס, ובסוף חייבת ללחוץ "שליחת ההזמנה". עד שהיא לוחצת, ההזמנה מופיעה אצלך עם "הלקוחה עוד לא שלחה". אחרי שהיא שולחת — בודקים שהכסף נכנס ומאשרים.'}</p>
       </div>`;
   };
   const textsHtml = () => {

@@ -149,6 +149,10 @@
     const head = `${preview ? '<div class="preview-banner">תצוגה מקדימה — הזמנות לא נשלחות מכאן</div>' : ''}<div class="hero"><h1>${esc(cfg.title)}</h1>`;
     if (!cfg.open && !preview) return emptyPage(`${head}</div><div class="empty">${esc(cfg.closedMsg || 'ההזמנות סגורות כרגע')}</div>`);
     if (!cfg.products.length) return emptyPage(`${head}</div><div class="empty">התפריט מתעדכן — חזרי בקרוב 🤎</div>`);
+    // הזמנה שמולאה ושולמה (או לא) אבל לא נשלחה סופית — חוזרים אליה עם כפתור השליחה
+    const pend = !preview && store.get(PENDING());
+    if (pend && pend.res && pend.order && Date.now() - (+pend.at || 0) < 6 * 864e5) return done(pend.order, pend.res, pend.snap, true);
+    if (pend) store.del(PENDING());
     loadDraft();
     // קוד שהגיע מהקישור (או נשמר בטיוטה) וכבר לא תקף — מסירים אותו ומסבירים, במקום שהלקוחה תגלה רק בסוף
     if (st.coupon) { const c = coupon(); if (c && c.fatal) { giftErr = `קוד ההנחה ${st.coupon.trim().toUpperCase().slice(0, 30)} לא התקבל: ${c.reason}`; st.coupon = ''; } }
@@ -299,7 +303,8 @@
     if (st.method === 'delivery' && st.address.trim().length < 3) return { label: 'למילוי כתובת', focus: '#f_a' };
     if (!st.name.trim()) return { label: 'המשך לפרטים', focus: '#f_n' };
     if (!st.phone.trim()) return { label: 'המשך לפרטים', focus: '#f_p' };
-    return { label: 'שליחת הזמנה', send: true };
+    // כשנדרש תשלום: הטופס נקלט, ו"שליחת ההזמנה" הסופית היא אחרי התשלום (במסך הבא)
+    return { label: dueFor(total()) > 0 ? 'המשך לתשלום' : 'שליחת הזמנה', send: true };
   }
   let lastTotal = null;
   function drawBar() {
@@ -438,7 +443,9 @@
     try { await navigator.clipboard.writeText(text); return true; } catch (e) { }
     try { const ta = document.createElement('textarea'); ta.value = text; ta.style.cssText = 'position:fixed;opacity:0'; document.body.appendChild(ta); ta.select(); const ok = document.execCommand('copy'); ta.remove(); return ok; } catch (e) { return false; }
   }
-  function done(order, res, snap) {
+  const PENDING = () => 'ag-pending-' + slug;
+  let leaveGuard = null;
+  function done(order, res, snap, resumed) {
     const d = parse(order.date), sum = +res.total, due = +res.due, off = Math.round((snap.sub + snap.fee - sum) * 100) / 100, first = esc(order.name.split(' ')[0]);
     const when = `יום ${DAYS[d.getDay()]} ${fmtD(order.date)}${order.time ? ' בשעה ' + order.time : ''}`;
     const text = `היי! שלחתי הזמנה #${res.ref} בטופס 🤎\n` + snap.ls.map(l => `• ${l.q} × ${l.p.name}${l.opt ? ' (' + l.opt + ')' : ''}`).join('\n') +
@@ -453,13 +460,16 @@
           <div class="pay-acts">${bt ? `<a class="btn" data-bit href="${esc(bt.href)}" ${bt.blank ? 'target="_blank" rel="noopener noreferrer"' : ''}>פתיחת ביט לתשלום ${money(due)}</a>` : ''}</div>
           <div class="note" id="bitHint">${bitHint}</div></div>` : ''}
         ${pb ? `<div class="pay-opt"><div class="top"><div><b>פייבוקס</b><div class="note" style="margin:0">תשלום בקישור</div></div><a class="btn ghost sm" href="${esc(pb)}" target="_blank" rel="noopener noreferrer">לתשלום בפייבוקס</a></div></div>` : ''}
-        <div id="claimBox" style="margin-top:14px"><div class="note" style="margin-bottom:8px">אחרי שהעברת — לחצי כאן כדי שאדע:</div>
-          <div class="addr-acts">${bit ? '<button type="button" class="btn soft" data-claim="ביט">שילמתי בביט ✓</button>' : ''}${pb ? '<button type="button" class="btn soft" data-claim="פייבוקס">שילמתי בפייבוקס ✓</button>' : ''}</div></div>
+        <div id="claimBox" class="send-step"><div class="send-h"><span class="n">2</span>שליחת ההזמנה</div>
+          <p class="note" style="margin:4px 0 10px">אחרי התשלום — <b>חובה ללחוץ כאן</b>. בלי זה ההזמנה לא נשלחת אליי.</p>
+          <div class="send-acts">${bit ? `<button type="button" class="btn" data-claim="ביט">שילמתי בביט — שליחת ההזמנה</button>` : ''}${pb ? `<button type="button" class="btn" data-claim="פייבוקס">שילמתי בפייבוקס — שליחת ההזמנה</button>` : ''}${!bit && !pb ? `<button type="button" class="btn" data-claim="העברה">שילמתי — שליחת ההזמנה</button>` : ''}</div></div>
       </div>` : '';
     app.innerHTML = `${preview ? '<div class="preview-banner">תצוגה מקדימה — כך ייראה המסך אחרי שליחה (שום דבר לא נשלח)</div>' : ''}<div class="card done">
-      <div class="ic" style="${needPay ? 'background:var(--sand);color:var(--brown)' : ''}">${needPay ? '₪' : '✓'}</div>
-      <h1 style="margin-top:12px">${needPay ? `כמעט סיימנו, ${first}!` : `תודה ${first}! ההזמנה התקבלה`}</h1>
-      <p class="note">${needPay ? `הזמנה <b>#${esc(res.ref)}</b> נקלטה ותאושר אחרי התשלום` : `מספר הזמנה <b>#${esc(res.ref)}</b>`} · ${when}</p>
+      ${needPay && resumed ? '<div class="paybox-note" style="margin:0 0 12px;text-align:start">ההזמנה הזו עוד לא נשלחה. אם כבר שילמת — לחצי למטה על "שליחת ההזמנה".</div>' : ''}
+      <div class="ic" id="doneIc" style="${needPay ? 'background:var(--sand);color:var(--brown)' : ''}">${needPay ? '₪' : '✓'}</div>
+      <h1 style="margin-top:12px" id="doneH">${needPay ? `עוד שני צעדים, ${first}` : `תודה ${first}! ההזמנה התקבלה`}</h1>
+      <p class="note" id="doneSub">${needPay ? `הזמנה <b>#${esc(res.ref)}</b> · ${when}<br><b>1.</b> משלמים · <b>2.</b> לוחצים "שליחת ההזמנה"` : `מספר הזמנה <b>#${esc(res.ref)}</b> · ${when}`}</p>
+      ${needPay ? '<div class="send-h" style="margin-top:14px"><span class="n">1</span>תשלום</div>' : ''}
       ${payHtml}
       <div class="sum">${snap.ls.map(l => `<div><span>${lineName(l)}</span><span>${money(l.q * l.p.price)}</span></div>`).join('')}
         ${snap.fee ? `<div><span>משלוח</span><span>${money(snap.fee)}</span></div>` : ''}${off > 0 ? `<div><span>קוד הנחה ${esc(order.couponCode)}</span><span style="color:var(--ok)">−${money(off)}</span></div>` : ''}<div><span>סה״כ</span><span>${money(sum)}</span></div></div>
@@ -467,8 +477,24 @@
       ${!needPay && cfg.payInfo ? `<p class="note">💳 ${esc(cfg.payInfo)}</p>` : ''}
       ${cfg.phone ? `<p class="note">${needPay ? 'שאלות? אפשר לשלוח לי הודעה:' : 'אחזור אלייך לאישור סופי. אפשר גם לשלוח לי הודעה:'}</p>` : (needPay ? '' : '<p class="note">אחזור אלייך לאישור סופי.</p>')}
       ${cfg.phone ? `<a class="btn wa" href="https://wa.me/${esc(cfg.phone)}?text=${encodeURIComponent(text)}" target="_blank" rel="noopener">שליחת הודעה בוואטסאפ</a>` : ''}
-      <div style="margin-top:12px"><button type="button" class="btn ghost" data-reload>הזמנה נוספת</button></div></div>`;
+      <div style="margin-top:12px" id="againBox">${!needPay ? '<button type="button" class="btn ghost" data-reload>הזמנה נוספת</button>' : resumed ? '<button type="button" class="link sm" data-fresh>ההזמנה הזו כבר לא רלוונטית — להתחיל הזמנה חדשה</button>' : ''}</div></div>`;
     scrollTo(0, 0);
+    // עד שהלקוחה לוחצת "שליחת ההזמנה": שומרים את המסך (חוזר גם אחרי סגירת הדף) ומזהירים לפני יציאה
+    if (needPay && !preview) {
+      store.set(PENDING(), { order, res, snap, at: resumed && store.get(PENDING()) ? store.get(PENDING()).at : Date.now() });
+      if (leaveGuard) removeEventListener('beforeunload', leaveGuard);
+      leaveGuard = e => { e.preventDefault(); e.returnValue = ''; };
+      addEventListener('beforeunload', leaveGuard);
+    }
+    const sent = method => {
+      store.del(PENDING()); if (leaveGuard) { removeEventListener('beforeunload', leaveGuard); leaveGuard = null; }
+      $('#claimBox').innerHTML = `<div class="paid-ok">✓ ההזמנה נשלחה! היא תאושר ברגע שאוודא שהתשלום${method ? ' ב' + esc(method) : ''} נכנס.</div>`;
+      $('#doneH').textContent = `תודה ${order.name.split(' ')[0]}! ההזמנה נשלחה`;
+      $('#doneSub').innerHTML = `מספר הזמנה <b>#${esc(res.ref)}</b> · ${when}`;
+      const ic = $('#doneIc'); ic.textContent = '✓'; ic.style.cssText = '';
+      $('#againBox').innerHTML = '<button type="button" class="btn ghost" data-reload>הזמנה נוספת</button>';
+      scrollTo({ top: 0, behavior: 'smooth' });
+    };
     // כתובת האיסוף: מוצגת רק אחרי שליחה, עם העתקה ושיתוף בוואטסאפ (למי שאוספת בשבילך)
     const showAddr = a => {
       if (!a || !$('#pickupAddr')) return;
@@ -487,13 +513,18 @@
       if (c) { const lbl = c.dataset.lbl || (c.dataset.lbl = c.textContent); c.textContent = (await copyText(c.dataset.copy)) ? 'הועתק ✓' : c.dataset.copy; setTimeout(() => { c.textContent = lbl; }, 2500); return; }
       // פתיחת ביט: מעתיקים את המספר (בלי לעצור את פתיחת האפליקציה) ומסבירים מה לעשות שם
       if (e.target.closest('[data-bit]')) { if (!bt.direct) { copyText(bitDigits); const h = $('#bitHint'); if (h) h.innerHTML = `<b>המספר הועתק ✓</b> בביט: העברה ← הדביקי את המספר ← ${money(due)} ← בהערה: הזמנה #${esc(res.ref)}`; } return; }
+      if (e.target.closest('[data-fresh]')) {
+        if (!confirm('להתחיל הזמנה חדשה? ההזמנה הזו לא תישלח.')) return;
+        store.del(PENDING()); if (leaveGuard) { removeEventListener('beforeunload', leaveGuard); leaveGuard = null; } location.reload(); return;
+      }
       const b = e.target.closest('[data-claim]'); if (!b) return;
-      if (preview) { $('#claimBox').innerHTML = '<div class="paid-ok">✓ תודה! קיבלתי את העדכון. ההזמנה תאושר ברגע שאוודא שהתשלום נכנס.</div>'; return; }
-      b.disabled = true; b.textContent = 'שולחת…';
+      if (preview) return sent(b.dataset.claim);
+      const lbl = b.textContent; b.disabled = true; b.textContent = 'שולחת…';
       try {
         const ok = await rpc('form_paid_claim', { p_slug: slug, p_ref: res.ref, p_phone: order.phone, p_method: b.dataset.claim });
-        $('#claimBox').innerHTML = ok ? '<div class="paid-ok">✓ תודה! קיבלתי את העדכון. ההזמנה תאושר ברגע שאוודא שהתשלום נכנס.</div>' : '<div class="err">לא הצלחתי לעדכן. שלחי לי הודעה בוואטסאפ.</div>';
-      } catch (err) { b.disabled = false; b.textContent = 'שילמתי ב' + b.dataset.claim + ' ✓'; if (!$('#claimBox .err')) $('#claimBox').insertAdjacentHTML('beforeend', '<div class="err">אין חיבור — נסי שוב</div>'); }
+        if (ok) sent(b.dataset.claim);
+        else { store.del(PENDING()); if (leaveGuard) { removeEventListener('beforeunload', leaveGuard); leaveGuard = null; } $('#claimBox').innerHTML = '<div class="err">לא הצלחתי לשלוח את ההזמנה. שלחי לי הודעה בוואטסאפ עם מספר ההזמנה.</div>'; }
+      } catch (err) { b.disabled = false; b.textContent = lbl; if (!$('#claimBox .err')) $('#claimBox').insertAdjacentHTML('beforeend', '<div class="err">אין חיבור — ההזמנה עוד לא נשלחה. נסי שוב בעוד רגע.</div>'); }
     };
   }
   load();

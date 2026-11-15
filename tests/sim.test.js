@@ -296,7 +296,7 @@ t('לוח זמנים לאפייה מחושב אחורה', () => {
 });
 t('מצב תשלום להזמנה מהטופס (מקדמה / דיווח / אושר)', () => {
   const o = { items: [{ name: 'x', qty: 1, unitPrice: 100 }], method: 'pickup', paid: 0, payDue: 50, payMode: 'deposit', status: 'new' };
-  assert.strictEqual(A.calc.payState(o).label, 'ממתינה לתשלום');
+  assert.strictEqual(A.calc.payState(o).label, 'הלקוחה עוד לא שלחה');
   o.payClaim = { method: 'ביט', at: new Date().toISOString() }; assert.strictEqual(A.calc.payState(o).label, 'דיווחה ששילמה');
   o.paid = 50; assert.strictEqual(A.calc.payState(o).label, 'מקדמה');
   o.paid = 100; assert.strictEqual(A.calc.payState(o).label, 'שולם');
@@ -308,7 +308,7 @@ t('ניקוי אוטומטי של נתוני דוגמה ישנים', () => {
   A.seed.demo(st); assert.ok(A.seed.hasDemo(st));
   st.orders.push({ id: 'mine', num: 5000, date: U.today(), status: 'new', items: [{ recipeId: 'lib-challah', name: 'חלה', qty: 1, unitPrice: 28 }] });
   A.seed.clearDemo(st);
-  assert.ok(!A.seed.hasDemo(st)); assert.strictEqual(st.orders.length, 1); assert.strictEqual(st.recipes.filter(r => r.library).length, 28);
+  assert.ok(!A.seed.hasDemo(st)); assert.strictEqual(st.orders.length, 1); assert.strictEqual(st.recipes.filter(r => r.library).length, 29);
   assert.strictEqual(st.orders[0].items[0].recipeId, 'lib-challah', 'הזמנה אמיתית נשארת מקושרת');
   A.state = save;
 });

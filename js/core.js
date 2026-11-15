@@ -476,7 +476,7 @@
   C.incrementCouponUse = () => { };
   C.payState = o => {
     const t = C.orderTotals(o);
-    if (o.payDue > 0 && t.paid < o.payDue - 0.01 && o.status !== 'cancelled') return o.payClaim ? { label: 'דיווחה ששילמה', cls: 'info' } : { label: 'ממתינה לתשלום', cls: 'warn' };
+    if (o.payDue > 0 && t.paid < o.payDue - 0.01 && o.status !== 'cancelled') return o.payClaim ? { label: 'דיווחה ששילמה', cls: 'info' } : { label: 'הלקוחה עוד לא שלחה', cls: 'warn' };
     if (t.total > 0 && t.paid >= t.total - 0.01) return { label: 'שולם', cls: 'ok' };
     if (t.paid > 0) return { label: 'מקדמה', cls: 'warn' };
     return { label: 'לא שולם', cls: 'bad' };

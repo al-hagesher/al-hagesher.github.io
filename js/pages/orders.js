@@ -167,9 +167,9 @@
     if (!(o.payDue > 0) || t.paid >= o.payDue - 0.01 || o.status === 'cancelled') return '';
     const kind = o.payMode === 'full' ? 'תשלום מלא' : 'מקדמה';
     const ago = o.createdTs ? Math.max(0, Math.round((Date.now() - new Date(o.createdTs)) / 36e5)) : null;
-    if (o.payClaim) return `<div class="notice info section">${A.icon('wallet')}<div><b>הלקוחה דיווחה ששילמה ${U.money(o.payDue)} ב${U.esc(o.payClaim.method || 'העברה')}.</b> בדקי באפליקציה שהכסף נכנס, ואז אשרי.
+    if (o.payClaim) return `<div class="notice info section">${A.icon('wallet')}<div><b>✓ הלקוחה שלחה את ההזמנה ודיווחה ששילמה ${U.money(o.payDue)} ב${U.esc(o.payClaim.method || 'העברה')}.</b> בדקי באפליקציה שהכסף נכנס, ואז אשרי.
       <div style="margin-top:8px"><button class="btn sm" data-approvepay>${A.icon('check')}התשלום התקבל — אישור ההזמנה</button></div></div></div>`;
-    return `<div class="notice section">${A.icon('wallet')}<div><b>ממתינה ל${kind}: ${U.money(o.payDue)}.</b> ההזמנה לא מאושרת עד שהתשלום מתקבל${ago != null ? ` · נשלחה לפני ${ago} שעות` : ''}${A.payOverdue(o) ? ' · <b>עבר הזמן לתשלום</b> — אפשר לבטל או לשלוח תזכורת' : ''}.
+    return `<div class="notice section">${A.icon('wallet')}<div><b>⏳ הלקוחה עוד לא שלחה את ההזמנה.</b> היא מילאה את הטופס, אבל עוד לא לחצה על "שליחת ההזמנה" אחרי ה${kind} (${U.money(o.payDue)})${ago != null ? ` · מילאה לפני ${ago} שעות` : ''}${A.payOverdue(o) ? ' · <b>עבר הזמן לתשלום</b> — אפשר לבטל או לשלוח תזכורת' : ''}.
       <div class="row" style="margin-top:8px"><button class="btn sm" data-approvepay>${A.icon('check')}התשלום התקבל — אישור ההזמנה</button>${A.payOverdue(o) ? `<button class="btn sm danger" data-cancelunpaid>${A.icon('x')}ביטול ההזמנה</button>` : ''}</div></div></div>`;
   }
 

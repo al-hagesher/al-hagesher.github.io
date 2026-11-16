@@ -208,7 +208,7 @@
   function notify(orders, claim) {
     const o = orders[0];
     const msg = claim ? `${o.customerName} שלחה את ההזמנה ודיווחה ששילמה ב${o.payClaim.method || 'העברה'} — בדקי ואשרי`
-      : orders.length === 1 ? `הזמנה חדשה מ${o.customerName} ל${U.relDay(o.date)} · ${U.money(C.orderTotals(o).total)}${o.payDue > 0 && !o.payClaim ? ' · עוד לא שלחה (ממתינה לתשלום ולשליחה)' : ''}` : `${orders.length} הזמנות חדשות מהטופס`;
+      : orders.length === 1 ? `הזמנה חדשה מ${o.customerName} ל${U.relDay(o.date)} · ${U.money(C.orderTotals(o).total)}${o.payDue > 0 && C.awaitsSend(o) ? ' · עוד לא שלחה (ממתינה לתשלום ולשליחה)' : ''}` : `${orders.length} הזמנות חדשות מהטופס`;
     A.toast('🛎️ ' + msg);
     try { const ctx = new (root.AudioContext || root.webkitAudioContext)(); [0, .18].forEach((t, i) => { const os = ctx.createOscillator(), g = ctx.createGain(); os.frequency.value = i ? 1046 : 784; os.connect(g); g.connect(ctx.destination); g.gain.setValueAtTime(.2, ctx.currentTime + t); g.gain.exponentialRampToValueAtTime(.001, ctx.currentTime + t + .35); os.start(ctx.currentTime + t); os.stop(ctx.currentTime + t + .4); }); } catch (e) { }
     try { if (root.Notification && Notification.permission === 'granted') new Notification('על הגשר', { body: msg, icon: 'assets/icon.png' }); } catch (e) { }

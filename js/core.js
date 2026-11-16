@@ -474,9 +474,12 @@
   };
   // נשאר לתאימות לאחור — אין יותר מונה לעדכן (ראי couponUses)
   C.incrementCouponUse = () => { };
+  // מאז 16/11/2026 הלקוחה חייבת ללחוץ "שליחת ההזמנה" אחרי התשלום. בהזמנות מלפני כן הלחיצה הייתה רשות.
+  C.SEND_STEP_SINCE = '2026-11-15T22:55:00Z';
+  C.awaitsSend = o => !o.payClaim && !!o.createdTs && o.createdTs >= C.SEND_STEP_SINCE;
   C.payState = o => {
     const t = C.orderTotals(o);
-    if (o.payDue > 0 && t.paid < o.payDue - 0.01 && o.status !== 'cancelled') return o.payClaim ? { label: 'דיווחה ששילמה', cls: 'info' } : { label: 'הלקוחה עוד לא שלחה', cls: 'warn' };
+    if (o.payDue > 0 && t.paid < o.payDue - 0.01 && o.status !== 'cancelled') return o.payClaim ? { label: 'דיווחה ששילמה', cls: 'info' } : C.awaitsSend(o) ? { label: 'הלקוחה עוד לא שלחה', cls: 'warn' } : { label: 'ממתינה לתשלום', cls: 'warn' };
     if (t.total > 0 && t.paid >= t.total - 0.01) return { label: 'שולם', cls: 'ok' };
     if (t.paid > 0) return { label: 'מקדמה', cls: 'warn' };
     return { label: 'לא שולם', cls: 'bad' };

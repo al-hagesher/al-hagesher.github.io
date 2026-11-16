@@ -166,10 +166,13 @@
   function payNotice(o, t) {
     if (!(o.payDue > 0) || t.paid >= o.payDue - 0.01 || o.status === 'cancelled') return '';
     const kind = o.payMode === 'full' ? 'תשלום מלא' : 'מקדמה';
-    const ago = o.createdTs ? Math.max(0, Math.round((Date.now() - new Date(o.createdTs)) / 36e5)) : null;
+    const ago = o.createdTs ? Math.max(0, Math.floor((Date.now() - new Date(o.createdTs)) / 36e5)) : null;
     if (o.payClaim) return `<div class="notice info section">${A.icon('wallet')}<div><b>✓ הלקוחה שלחה את ההזמנה ודיווחה ששילמה ${U.money(o.payDue)} ב${U.esc(o.payClaim.method || 'העברה')}.</b> בדקי באפליקציה שהכסף נכנס, ואז אשרי.
       <div style="margin-top:8px"><button class="btn sm" data-approvepay>${A.icon('check')}התשלום התקבל — אישור ההזמנה</button></div></div></div>`;
-    return `<div class="notice section">${A.icon('wallet')}<div><b>⏳ הלקוחה עוד לא שלחה את ההזמנה.</b> היא מילאה את הטופס, אבל עוד לא לחצה על "שליחת ההזמנה" אחרי ה${kind} (${U.money(o.payDue)})${ago != null ? ` · מילאה לפני ${ago} שעות` : ''}${A.payOverdue(o) ? ' · <b>עבר הזמן לתשלום</b> — אפשר לבטל או לשלוח תזכורת' : ''}.
+    const agoTxt = ago == null ? '' : ago < 1 ? 'לפני פחות משעה' : ago === 1 ? 'לפני שעה' : `לפני ${ago} שעות`;
+    const head = C.awaitsSend(o) ? `<b>⏳ הלקוחה עוד לא שלחה את ההזמנה.</b> היא מילאה את הטופס, אבל עוד לא לחצה על "שליחת ההזמנה" אחרי התשלום (${kind}: ${U.money(o.payDue)})${agoTxt ? ` · מילאה ${agoTxt}` : ''}`
+      : `<b>ממתינה ל${kind}: ${U.money(o.payDue)}.</b> ההזמנה לא מאושרת עד שהתשלום מתקבל${agoTxt ? ` · נשלחה ${agoTxt}` : ''}`;
+    return `<div class="notice section">${A.icon('wallet')}<div>${head}${A.payOverdue(o) ? ' · <b>עבר הזמן לתשלום</b> — אפשר לבטל או לשלוח תזכורת' : ''}.
       <div class="row" style="margin-top:8px"><button class="btn sm" data-approvepay>${A.icon('check')}התשלום התקבל — אישור ההזמנה</button>${A.payOverdue(o) ? `<button class="btn sm danger" data-cancelunpaid>${A.icon('x')}ביטול ההזמנה</button>` : ''}</div></div></div>`;
   }
 
@@ -183,7 +186,7 @@
     return [
       { label: 'אישור הזמנה', text: `היי ${first}, תודה שהזמנת מ${biz}! 🤎 ההזמנה מאושרת.\n${items}\nמועד: ${when} (${o.method === 'delivery' ? 'משלוח' : 'איסוף'})${o.method !== 'delivery' && pickup ? `\nכתובת לאיסוף: ${pickup}` : ''}\nסה״כ: ${U.money(t.total)}${t.paid ? `\nשולם: ${U.money(t.paid)}` : ''}${pay && t.balance ? `\n${pay}` : ''}\nמחכה לאפות בשבילך!` },
       { label: 'ההזמנה מוכנה', text: `היי ${first}, ההזמנה שלך מ${biz} מוכנה ${o.method === 'delivery' ? 'ויוצאת אלייך' : 'לאיסוף'} 🥐${t.balance ? `\nיתרה לתשלום: ${U.money(t.balance)}` : ''}` },
-      { label: 'תזכורת תשלום', text: o.payDue > 0 && t.paid < o.payDue ? `היי ${first}, כדי לאשר את הזמנה #${o.num} חסר${o.payMode === 'full' ? ' התשלום' : 'ה המקדמה'} של ${U.money(o.payDue - t.paid)}.${(A.state.form.pay || {}).bit || A.state.settings.phone ? ` ביט: ${(A.state.form.pay || {}).bit || A.state.settings.phone}` : ''}${A.safeUrl((A.state.form.pay || {}).paybox) ? `\nפייבוקס: ${A.safeUrl(A.state.form.pay.paybox)}` : ''}\nתודה! 🤎` : `היי ${first}, תזכורת עדינה — נשארה יתרה של ${U.money(t.balance)} על הזמנה #${o.num}. אפשר בביט/פייבוקס. תודה! 🤎` },
+      { label: 'תזכורת תשלום', text: o.payDue > 0 && t.paid < o.payDue ? `היי ${first}, כדי לאשר את הזמנה #${o.num} חסר${o.payMode === 'full' ? ' התשלום' : 'ה המקדמה'} של ${U.money(o.payDue - t.paid)}.${(A.state.form.pay || {}).bit || A.state.settings.phone ? ` ביט: ${(A.state.form.pay || {}).bit || A.state.settings.phone}` : ''}${A.safeUrl((A.state.form.pay || {}).paybox) ? `\nפייבוקס: ${A.safeUrl(A.state.form.pay.paybox)}` : ''}${C.awaitsSend(o) && A.form && A.form.link() ? `\nאחרי התשלום — פתחי שוב את הטופס ולחצי "שליחת ההזמנה": ${A.form.link()}` : ''}\nתודה! 🤎` : `היי ${first}, תזכורת עדינה — נשארה יתרה של ${U.money(t.balance)} על הזמנה #${o.num}. אפשר בביט/פייבוקס. תודה! 🤎` },
       { label: 'בקשת חוות דעת', text: `היי ${first}, מקווה שנהניתם! 🤎 אשמח לשמוע איך היה — ואם אהבת, תמונה או המלצה קטנה עוזרות לי מאוד.${A.fb && A.fb.ready() ? `\nכאן זה לוקח פחות מדקה: ${A.fb.link(o.num)}` : ''}` },
       ...(A.state.settings.cancellationPolicy ? [{ label: 'מדיניות ביטולים', text: A.state.settings.cancellationPolicy }] : [])
     ].filter(m => m.label !== 'תזכורת תשלום' || t.balance > 0);

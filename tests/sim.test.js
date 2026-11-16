@@ -296,8 +296,10 @@ t('לוח זמנים לאפייה מחושב אחורה', () => {
 });
 t('מצב תשלום להזמנה מהטופס (מקדמה / דיווח / אושר)', () => {
   const o = { items: [{ name: 'x', qty: 1, unitPrice: 100 }], method: 'pickup', paid: 0, payDue: 50, payMode: 'deposit', status: 'new' };
-  assert.strictEqual(A.calc.payState(o).label, 'הלקוחה עוד לא שלחה');
-  o.payClaim = { method: 'ביט', at: new Date().toISOString() }; assert.strictEqual(A.calc.payState(o).label, 'דיווחה ששילמה');
+  // הזמנה ישנה (לפני כפתור "שליחת ההזמנה") — "ממתינה לתשלום"; הזמנה חדשה — "הלקוחה עוד לא שלחה"
+  o.createdTs = '2026-11-12T18:15:55.518294+00:00'; assert.strictEqual(A.calc.payState(o).label, 'ממתינה לתשלום');
+  o.createdTs = '2026-11-16T08:00:00.1+00:00'; assert.strictEqual(A.calc.payState(o).label, 'הלקוחה עוד לא שלחה');
+  o.payClaim ={ method: 'ביט', at: new Date().toISOString() }; assert.strictEqual(A.calc.payState(o).label, 'דיווחה ששילמה');
   o.paid = 50; assert.strictEqual(A.calc.payState(o).label, 'מקדמה');
   o.paid = 100; assert.strictEqual(A.calc.payState(o).label, 'שולם');
   const p = { items: [{ name: 'x', qty: 1, unitPrice: 100 }], paid: 0, status: 'new' }; assert.strictEqual(A.calc.payState(p).label, 'לא שולם');

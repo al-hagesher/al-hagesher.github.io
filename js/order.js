@@ -512,6 +512,8 @@
       const c = e.target.closest('[data-copy]');
       if (c) { const lbl = c.dataset.lbl || (c.dataset.lbl = c.textContent); c.textContent = (await copyText(c.dataset.copy)) ? 'הועתק ✓' : c.dataset.copy; setTimeout(() => { c.textContent = lbl; }, 2500); return; }
       // פתיחת ביט: מעתיקים את המספר (בלי לעצור את פתיחת האפליקציה) ומסבירים מה לעשות שם
+      // מעבר לאפליקציית ביט באותו חלון (אנדרואיד) — בלי אזהרת "לצאת מהדף?"; ההזמנה שמורה בטלפון בכל מקרה
+      if (e.target.closest('[data-bit]') && leaveGuard) { const g = leaveGuard; removeEventListener('beforeunload', g); setTimeout(() => { if (leaveGuard === g) addEventListener('beforeunload', g); }, 4000); }
       if (e.target.closest('[data-bit]')) { if (!bt.direct) { copyText(bitDigits); const h = $('#bitHint'); if (h) h.innerHTML = `<b>המספר הועתק ✓</b> בביט: העברה ← הדביקי את המספר ← ${money(due)} ← בהערה: הזמנה #${esc(res.ref)}`; } return; }
       if (e.target.closest('[data-fresh]')) {
         if (!confirm('להתחיל הזמנה חדשה? ההזמנה הזו לא תישלח.')) return;

@@ -129,7 +129,7 @@
   });
   FB.qrDataUrl = async (text, size = 600) => {
     const Q = await FB.loadQr(), d = document.createElement('div');
-    new Q(d, { text, width: size, height: size, colorDark: '#3b2d1e', colorLight: '#ffffff', correctLevel: Q.CorrectLevel.M });
+    new Q(d, { text, width: size, height: size, colorDark: '#4a2a16', colorLight: '#ffffff', correctLevel: Q.CorrectLevel.M });
     const c = d.querySelector('canvas'); return c ? c.toDataURL('image/png') : (d.querySelector('img') || {}).src || '';
   };
   const loadImg = src => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
@@ -141,13 +141,13 @@
     x.fillStyle = '#faf6f0'; x.fillRect(0, 0, W, H);
     x.strokeStyle = '#d2c4b2'; x.lineWidth = 4; rr(x, 36, 36, W - 72, H - 72, 46); x.stroke();
     try { const logo = await loadImg('assets/logo-brown.png'); const lw = 300, lh = lw * logo.height / logo.width; x.drawImage(logo, (W - lw) / 2, 90, lw, lh); } catch (e) { }
-    x.direction = 'rtl'; x.textAlign = 'center'; x.fillStyle = '#3b2d1e';
+    x.direction = 'rtl'; x.textAlign = 'center'; x.fillStyle = '#4a2a16';
     x.font = '110px Bellefair, serif'; x.fillText(String(b.title || 'איך היה?').replace(/\s*[\u{1F300}-\u{1FAFF}☀-➿️]+/gu, ''), W / 2, 470);
-    x.fillStyle = '#705f4e'; x.font = '40px Assistant, sans-serif'; x.fillText('סרקי את הקוד ושתפי אותנו — פחות מדקה', W / 2, 540);
+    x.fillStyle = '#745a49'; x.font = '40px Assistant, sans-serif'; x.fillText('סרקי את הקוד ושתפי אותנו — פחות מדקה', W / 2, 540);
     const qr = await loadImg(await FB.qrDataUrl(FB.link(), 640)), qs = 560, qx = (W - qs) / 2, qy = 600;
     x.fillStyle = '#fff'; rr(x, qx - 30, qy - 30, qs + 60, qs + 60, 36); x.fill();
     x.drawImage(qr, qx, qy, qs, qs);
-    x.fillStyle = '#80624a'; x.font = '700 40px Assistant, sans-serif'; x.fillText(`תודה שבחרת ב${A.state.settings.businessName || 'על הגשר'} 🤍`, W / 2, H - 110);
+    x.fillStyle = '#8c5f3f'; x.font = '700 40px Assistant, sans-serif'; x.fillText(`תודה שבחרת ב${A.state.settings.businessName || 'על הגשר'} 🤍`, W / 2, H - 110);
     return c;
   };
   function rr(x, X, Y, w, h, r) { x.beginPath(); x.moveTo(X + r, Y); x.arcTo(X + w, Y, X + w, Y + h, r); x.arcTo(X + w, Y + h, X, Y + h, r); x.arcTo(X, Y + h, X, Y, r); x.arcTo(X, Y, X + w, Y, r); x.closePath(); }
@@ -163,12 +163,12 @@
     const card = `<div class="c"><img class="lg" src="${logo}" alt=""><h2>${U.esc(b.title || 'איך היה?')}</h2><p>סרקי את הקוד ושתפי אותנו — פחות מדקה</p><img class="qr" src="${qr}" alt=""><small>תודה שבחרת ב${U.esc(biz)}</small></div>`;
     w.document.open();
     w.document.write(`<!doctype html><html dir="rtl" lang="he"><head><meta charset="utf-8"><title>כרטיסי משוב</title><link rel="stylesheet" href="${new URL('css/fonts.css', location.href).href}"><style>
-      @page { size: A4; margin: 8mm; } * { box-sizing: border-box; } body { margin: 0; font-family: Assistant, Arial, sans-serif; color: #3b2d1e; }
+      @page { size: A4; margin: 8mm; } * { box-sizing: border-box; } body { margin: 0; font-family: Assistant, Arial, sans-serif; color: #4a2a16; }
       .g { display: grid; grid-template-columns: 1fr 1fr; grid-auto-rows: 69mm; gap: 0; }
       .c { border: 1px dashed #c9b8a3; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 4mm; break-inside: avoid; }
       .lg { width: 22mm; } h2 { font-family: Bellefair, 'Frank Ruhl Libre', serif; font-weight: 400; font-size: 20pt; margin: 1mm 0 0; }
-      p { margin: .5mm 0 1.5mm; font-size: 9.5pt; color: #705f4e; } .qr { width: 33mm; height: 33mm; } small { font-size: 8pt; color: #80624a; margin-top: 1mm; }
-      .bar { position: fixed; top: 12px; left: 12px; } .bar button { background: #3b2d1e; color: #fff8ef; border: 0; padding: 10px 18px; border-radius: 10px; font: inherit; cursor: pointer; }
+      p { margin: .5mm 0 1.5mm; font-size: 9.5pt; color: #745a49; } .qr { width: 33mm; height: 33mm; } small { font-size: 8pt; color: #8c5f3f; margin-top: 1mm; }
+      .bar { position: fixed; top: 12px; left: 12px; } .bar button { background: #4a2a16; color: #fff8ef; border: 0; padding: 10px 18px; border-radius: 10px; font: inherit; cursor: pointer; }
       @media print { .bar { display: none; } }
     </style></head><body><div class="bar"><button onclick="window.print()">🖨 הדפסה</button></div><div class="g">${card.repeat(8)}</div></body></html>`);
     w.document.close();

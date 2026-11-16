@@ -197,16 +197,16 @@
     if (!w) return A.toast('הדפדפן חסם חלון — אפשרי חלונות קופצים');
     // QR למשוב שמחובר להזמנה הזו (כשטופס המשוב פתוח)
     let qr = null; try { qr = A.fb ? await A.fb.orderQr(o) : null; } catch (e) { }
-    w.document.write(`<html dir="rtl" lang="he"><head><meta charset="utf-8"><title>הזמנה ${o.num}</title><style>body{font-family:Assistant,Arial;max-width:380px;margin:20px auto;color:#2f1d11}h2{font-family:'Frank Ruhl Libre',serif;color:#3b2d1e;margin:6px 0}td{padding:4px 0}.n{text-align:left}hr{border:0;border-top:1px dashed #a8805a}</style></head><body>
+    w.document.write(`<html dir="rtl" lang="he"><head><meta charset="utf-8"><title>הזמנה ${o.num}</title><style>body{font-family:Assistant,Arial;max-width:380px;margin:20px auto;color:#2e1a0d}h2{font-family:'Frank Ruhl Libre',serif;color:#4a2a16;margin:6px 0}td{padding:4px 0}.n{text-align:left}hr{border:0;border-top:1px dashed #ad7c50}</style></head><body>
       <div style="text-align:center"><img src="${new URL('assets/logo.png', location.href)}" style="width:150px"></div>
       <h2>הזמנה #${o.num}</h2><div>${U.esc(o.customerName)} · <span dir="ltr">${U.esc(o.phone || '')}</span></div>
       <div>${U.dayName(o.date)} ${U.fmtDate(o.date)} ${o.time || ''} · ${o.method === 'delivery' ? 'משלוח: ' + U.esc(o.address || '') : 'איסוף עצמי'}</div><hr>
-      <table style="width:100%">${o.items.map(i => `<tr><td>${U.fmt(i.qty)} × ${U.esc(i.name)}${i.description ? `<div style="color:#8a7462;font-size:0.85em;white-space:pre-wrap">${U.esc(i.description)}</div>` : ''}</td><td class="n">${U.money(i.qty * i.unitPrice)}</td></tr>`).join('')}
+      <table style="width:100%">${o.items.map(i => `<tr><td>${U.fmt(i.qty)} × ${U.esc(i.name)}${i.description ? `<div style="color:#7d5f4c;font-size:0.85em;white-space:pre-wrap">${U.esc(i.description)}</div>` : ''}</td><td class="n">${U.money(i.qty * i.unitPrice)}</td></tr>`).join('')}
       ${t.discount ? `<tr><td>הנחה</td><td class="n">−${U.money(t.discount)}</td></tr>` : ''}${t.delivery ? `<tr><td>משלוח</td><td class="n">${U.money(t.delivery)}</td></tr>` : ''}
       <tr><td><b>סה״כ</b></td><td class="n"><b>${U.money(t.total)}</b></td></tr><tr><td>שולם</td><td class="n">${U.money(t.paid)}</td></tr>${t.balance ? `<tr><td>יתרה</td><td class="n">${U.money(t.balance)}</td></tr>` : ''}</table><hr>
       ${o.allergies ? `<p><b>רגישויות:</b> ${U.esc(o.allergies)}</p>` : ''}${o.notes ? `<p>${U.esc(o.notes)}</p>` : ''}
-      <p style="text-align:center;color:#8a7462">תודה שבחרת ב${U.esc(A.state.settings.businessName)} 🤎</p>
-      ${qr ? `<div style="text-align:center;border-top:1px dashed #a8805a;padding-top:10px"><b style="font-family:'Frank Ruhl Libre',serif;font-size:1.2em;color:#3b2d1e">איך היה?</b><div style="color:#8a7462;font-size:.9em">סרקי ושתפי אותנו — פחות מדקה</div><img src="${qr.img}" style="width:120px;height:120px;margin-top:6px" alt=""></div>` : ''}</body></html>`);
+      <p style="text-align:center;color:#7d5f4c">תודה שבחרת ב${U.esc(A.state.settings.businessName)} 🤎</p>
+      ${qr ? `<div style="text-align:center;border-top:1px dashed #ad7c50;padding-top:10px"><b style="font-family:'Frank Ruhl Libre',serif;font-size:1.2em;color:#4a2a16">איך היה?</b><div style="color:#7d5f4c;font-size:.9em">סרקי ושתפי אותנו — פחות מדקה</div><img src="${qr.img}" style="width:120px;height:120px;margin-top:6px" alt=""></div>` : ''}</body></html>`);
     w.document.close(); setTimeout(() => { try { w.focus(); w.print(); } catch (e) { } }, 500);
   }
 
@@ -242,25 +242,25 @@
     w.document.write(`<!doctype html><html dir="rtl" lang="he"><head><meta charset="utf-8"><title>סיכום שבועי · ${U.fmtDate(start)}–${U.fmtDate(end)}</title>
       <style>
         * { box-sizing: border-box; }
-        body { font-family: 'Assistant', Arial, sans-serif; color: #2f1d11; max-width: 820px; margin: 0 auto; padding: 24px; line-height: 1.45; }
-        h1 { font-family: 'Frank Ruhl Libre', serif; color: #3b2d1e; margin: 0 0 4px; font-size: 1.8rem; }
-        .topline { color: #8a7462; margin-bottom: 20px; }
+        body { font-family: 'Assistant', Arial, sans-serif; color: #2e1a0d; max-width: 820px; margin: 0 auto; padding: 24px; line-height: 1.45; }
+        h1 { font-family: 'Frank Ruhl Libre', serif; color: #4a2a16; margin: 0 0 4px; font-size: 1.8rem; }
+        .topline { color: #7d5f4c; margin-bottom: 20px; }
         .summary { background: #f7efe5; border-radius: 12px; padding: 14px 18px; margin-bottom: 22px; display: flex; gap: 22px; flex-wrap: wrap; font-size: .95rem; }
-        .summary b { color: #3b2d1e; }
-        h2 { font-family: 'Frank Ruhl Libre', serif; color: #3b2d1e; border-bottom: 2px solid #a8805a; padding-bottom: 4px; margin: 28px 0 10px; font-size: 1.3rem; }
-        .muted { color: #8a7462; font-weight: 400; font-size: .9em; }
+        .summary b { color: #4a2a16; }
+        h2 { font-family: 'Frank Ruhl Libre', serif; color: #4a2a16; border-bottom: 2px solid #ad7c50; padding-bottom: 4px; margin: 28px 0 10px; font-size: 1.3rem; }
+        .muted { color: #7d5f4c; font-weight: 400; font-size: .9em; }
         .ord { border: 1px solid #e8ddd0; border-radius: 10px; padding: 10px 14px; margin-bottom: 10px; page-break-inside: avoid; break-inside: avoid; }
         .ord header { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 4px; }
         .ord .right { text-align: left; }
         .ord .meta { color: #5a4030; font-size: .9rem; margin-bottom: 6px; }
         .ord .items { margin: 4px 0; padding-right: 20px; }
         .ord .items li { margin-bottom: 2px; }
-        .ord .desc { color: #8a7462; font-size: .85rem; white-space: pre-wrap; padding-right: 8px; }
+        .ord .desc { color: #7d5f4c; font-size: .85rem; white-space: pre-wrap; padding-right: 8px; }
         .ord .notes { background: #fff8ef; padding: 6px 10px; border-radius: 6px; margin-top: 6px; font-size: .9rem; }
         .ord .bal { color: #b00020; }
-        .empty { color: #8a7462; font-style: italic; padding: 6px 10px; }
-        .foot { margin-top: 30px; text-align: center; color: #8a7462; font-size: .85rem; }
-        .print-btn { position: fixed; top: 16px; left: 16px; background: #3b2d1e; color: #fff8ef; border: 0; padding: 10px 18px; border-radius: 10px; font-size: 1rem; cursor: pointer; font-family: inherit; }
+        .empty { color: #7d5f4c; font-style: italic; padding: 6px 10px; }
+        .foot { margin-top: 30px; text-align: center; color: #7d5f4c; font-size: .85rem; }
+        .print-btn { position: fixed; top: 16px; left: 16px; background: #4a2a16; color: #fff8ef; border: 0; padding: 10px 18px; border-radius: 10px; font-size: 1rem; cursor: pointer; font-family: inherit; }
         @media print {
           .print-btn { display: none; }
           body { padding: 12px; }

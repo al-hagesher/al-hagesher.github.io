@@ -19,14 +19,20 @@
       // התראות
       const alerts = [];
       const claimed = A.state.orders.filter(o => o.payClaim && o.payDue > 0 && (+o.paid || 0) < o.payDue - 0.01 && o.status !== 'cancelled');
+      // הסדר = הדחיפות: קודם כסף והזמנות, אחר כך לקוחות, ובסוף תחזוקה
       if (claimed.length) alerts.push(['wallet', `${claimed.length === 1 ? 'לקוחה דיווחה' : claimed.length + ' לקוחות דיווחו'} על תשלום — לבדוק ולאשר`, 'orders']);
-      const overdue = A.state.orders.filter(o => A.payOverdue && A.payOverdue(o));
-      if (overdue.length) alerts.push(['alert', `${overdue.length === 1 ? 'הזמנה אחת לא שולמה' : overdue.length + ' הזמנות לא שולמו'} בזמן — לבטל או לשלוח תזכורת`, 'orders']);
-      if (A.platform && A.platform() !== 'desktop' && !A.isStandalone()) alerts.push(['download', 'אפשר להתקין את האפליקציה על המסך הראשי — 3 צעדים', 'settings']);
       const fresh = A.state.orders.filter(o => o.status === 'new');
       if (fresh.length) alerts.push(['orders', `${fresh.length === 1 ? 'הזמנה חדשה מחכה' : fresh.length + ' הזמנות חדשות מחכות'} לאישור שלך`, 'orders']);
+      const overdue = A.state.orders.filter(o => A.payOverdue && A.payOverdue(o));
+      if (overdue.length) alerts.push(['alert', `${overdue.length === 1 ? 'הזמנה אחת לא שולמה' : overdue.length + ' הזמנות לא שולמו'} בזמן — לבטל או לשלוח תזכורת`, 'orders']);
       const late = open.filter(o => o.date < today);
       if (late.length) alerts.push(['alert', `${late.length} הזמנות מתאריך שעבר עדיין לא סומנו כנמסרו`, 'orders']);
+      const fbCare = A.fb ? A.state.feedback.filter(A.fb.needsCare) : [], fbNew = A.fb ? A.fb.unseen() : 0;
+      if (fbCare.length) alerts.push(['star', `${fbCare.length === 1 ? 'משוב עם דירוג נמוך מחכה' : fbCare.length + ' משובים עם דירוג נמוך מחכים'} לטיפול`, 'feedback']);
+      else if (fbNew) alerts.push(['star', `${fbNew === 1 ? 'משוב חדש' : fbNew + ' משובים חדשים'} מלקוחות`, 'feedback']);
+      const waiting = A.state.orders.filter(o => o.status !== 'cancelled' && o.payDue > 0 && (+o.paid || 0) < o.payDue - 0.01 && C.awaitsSend && C.awaitsSend(o) && !(A.payOverdue && A.payOverdue(o)));
+      if (waiting.length) alerts.push(['clock', `${waiting.length === 1 ? 'לקוחה אחת עוד לא לחצה' : waiting.length + ' לקוחות עוד לא לחצו'} "שליחת ההזמנה" אחרי התשלום`, 'orders']);
+      if (A.platform && A.platform() !== 'desktop' && !A.isStandalone()) alerts.push(['download', 'אפשר להתקין את האפליקציה על המסך הראשי — 3 צעדים', 'settings']);
       const low = A.state.ingredients.filter(i => +i.minStock > 0 && (+i.stock || 0) < +i.minStock);
       if (low.length) alerts.push(['box', `חסר במלאי: ${low.slice(0, 4).map(i => i.name).join(', ')}${low.length > 4 ? '…' : ''}`, 'pantry']);
       const noPrice = A.state.recipes.filter(r => !r.price && !(A.isComponent && A.isComponent(r)));
@@ -70,8 +76,12 @@
           ${weekO.length ? `<div class="card"><div class="card-h"><h3>בהמשך השבוע</h3><a href="#/orders" class="small">לכל ההזמנות</a></div>${weekO.sort((a, b) => a.date.localeCompare(b.date)).map(A.orderRow).join('')}</div>` : ''}
         </div>
         <div class="stack">
-          ${alerts.length ? `<div class="card"><div class="card-h"><h3>${A.icon('alert')}דורש תשומת לב</h3></div>
-            ${alerts.map(([ic, t, link]) => `<a class="insight alert" href="#/${link}" style="text-decoration:none;color:inherit"><div class="ic">${A.icon(ic)}</div><div style="align-self:center">${U.esc(t)}</div></a>`).join('')}</div>` : `<div class="card"><div class="insight good" style="border:0"><div class="ic">${A.icon('check')}</div><div style="align-self:center">הכל מסודר. אין התראות.</div></div></div>`}
+          ${alerts.length ? (() => {
+            const item = ([ic, t, link]) => `<a class="insight alert" href="#/${link}" style="text-decoration:none;color:inherit"><div class="ic">${A.icon(ic)}</div><div style="align-self:center">${U.esc(t)}</div></a>`;
+            const top = alerts.slice(0, 5), rest = alerts.slice(5);
+            return `<div class="card"><div class="card-h"><h3>${A.icon('alert')}דורש תשומת לב</h3><span class="small muted">${alerts.length}</span></div>
+              ${top.map(item).join('')}${rest.length ? `<details class="more-alerts"><summary class="small">עוד ${rest.length} תזכורות</summary>${rest.map(item).join('')}</details>` : ''}</div>`;
+          })() : `<div class="card"><div class="insight good" style="border:0"><div class="ic">${A.icon('check')}</div><div style="align-self:center">הכל מסודר. אין התראות.</div></div></div>`}
           <div class="card"><div class="card-h"><h3>פעולות מהירות</h3></div>
             <div class="grid g2 qa" style="gap:8px">
               <button class="btn soft" data-act="newOrder">${A.icon('orders')}הזמנה</button>

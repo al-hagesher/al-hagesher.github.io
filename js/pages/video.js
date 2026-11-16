@@ -524,7 +524,7 @@
     const sig = { cancelled: false };
     A.modal({
       title: 'תצוגה מקדימה', size: 'narrow',
-      body: `<div style="text-align:center"><canvas id="pvCanvas" style="width:min(100%,280px);border-radius:14px;background:#26180e"></canvas>
+      body: `<div style="text-align:center"><canvas id="pvCanvas" style="width:min(100%,280px);border-radius:14px;background:#2a160a"></canvas>
         <div class="time-bar" style="height:6px;margin:10px 0 4px"><i id="pvProg" style="width:0;background:var(--caramel)"></i></div>
         <p class="small muted" style="margin:6px 0 0">תצוגה בלבד — שום דבר לא נשמר. אם הכל נראה טוב: "עריכת הסרטון".</p></div>`,
       foot: `<button class="btn" data-close>סגירה</button><button class="btn ghost" data-ed>${A.icon('edit')}עריכה ידנית</button>`,
@@ -565,7 +565,7 @@
     signal = { cancelled: false };
     A.modal({
       title: 'עורכת את הסרטון…', size: 'narrow',
-      body: `<div style="text-align:center"><canvas id="vcanvas" style="width:min(100%,260px);border-radius:14px;background:#26180e"></canvas>
+      body: `<div style="text-align:center"><canvas id="vcanvas" style="width:min(100%,260px);border-radius:14px;background:#2a160a"></canvas>
         <div class="time-bar" style="height:8px;margin:14px 0 6px"><i id="vprog" style="width:0;background:var(--caramel)"></i></div>
         <div class="small muted" id="vtxt">מכינה…</div><p class="small muted">העריכה נעשית בזמן אמת — סרטון של ${Math.round(plan.total)} שניות לוקח בערך ${Math.round(plan.total)} שניות. השאירי את המסך פתוח.</p></div>`,
       foot: `<button class="btn ghost" data-cancel>ביטול</button>`,

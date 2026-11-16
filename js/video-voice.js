@@ -177,7 +177,7 @@
     if (look === 'box') { // תיבה חומה מאחורי השורה
       const bw = Math.max(...rows.map(r => r.reduce((x, w) => x + w.width, 0) + gap * (r.length - 1))) + size * 1.2, bh = rows.length * lh + size * 0.55;
       const bx = (W - bw) / 2, by = y0 - bh / 2 + lift, rr = size * 0.45;
-      ctx.fillStyle = 'rgba(42,30,19,0.82)'; ctx.beginPath(); ctx.moveTo(bx + rr, by); ctx.arcTo(bx + bw, by, bx + bw, by + bh, rr); ctx.arcTo(bx + bw, by + bh, bx, by + bh, rr); ctx.arcTo(bx, by + bh, bx, by, rr); ctx.arcTo(bx, by, bx + bw, by, rr); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = 'rgba(46,26,13,0.82)'; ctx.beginPath(); ctx.moveTo(bx + rr, by); ctx.arcTo(bx + bw, by, bx + bw, by + bh, rr); ctx.arcTo(bx + bw, by + bh, bx, by + bh, rr); ctx.arcTo(bx, by + bh, bx, by, rr); ctx.arcTo(bx, by, bx + bw, by, rr); ctx.closePath(); ctx.fill();
     }
     rows.forEach((row, ri) => {
       const total = row.reduce((x, w) => x + w.width, 0) + gap * (row.length - 1);
@@ -192,7 +192,7 @@
             const pw = w.width + size * 0.4, ph = size * 1.1, px = x - w.width - size * 0.2, py = y - ph / 2, pr = size * 0.26;
             ctx.shadowColor = 'rgba(0,0,0,0.35)'; ctx.shadowBlur = size * 0.25;
             ctx.fillStyle = '#fff3df'; ctx.beginPath(); ctx.moveTo(px + pr, py); ctx.arcTo(px + pw, py, px + pw, py + ph, pr); ctx.arcTo(px + pw, py + ph, px, py + ph, pr); ctx.arcTo(px, py + ph, px, py, pr); ctx.arcTo(px, py, px + pw, py, pr); ctx.closePath(); ctx.fill();
-            ctx.shadowBlur = 0; ctx.fillStyle = '#3b2d1e'; ctx.fillText(w.w, x, y);
+            ctx.shadowBlur = 0; ctx.fillStyle = '#4a2a16'; ctx.fillText(w.w, x, y);
           } else {
             ctx.lineJoin = 'round'; ctx.lineWidth = size * 0.16; ctx.strokeStyle = 'rgba(30,18,10,0.85)'; ctx.strokeText(w.w, x, y);
             ctx.fillStyle = '#fffaf2'; ctx.fillText(w.w, x, y);

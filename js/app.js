@@ -2,10 +2,12 @@
 (function (root) {
   const A = root.App, U = A.util;
   A.pages = A.pages || {};
+  // התפריט מחולק לקבוצות לפי מה עושים — כך קל למצוא כל דבר
   const NAV = [
-    ['', 'home', 'בית'], ['assistant', 'spark', 'עוזרת AI'], ['orders', 'orders', 'הזמנות'], ['recipes', 'book', 'מתכונים'], ['form', 'link', 'טופס הזמנות'], ['coupons', 'tag', 'קופונים'], ['production', 'calendar', 'תכנון ייצור'],
-    ['pantry', 'box', 'מחסן ומחירים'], ['customers', 'users', 'לקוחות'], ['feedback', 'star', 'משובים'], ['expenses', 'wallet', 'הוצאות ורווחיות'],
-    'sep', ['video', 'play', 'סטודיו סרטונים'], ['stats', 'chart', 'סטטיסטיקות'], ['wheel', 'wheel', 'גלגל החיים'], ['tools', 'scale', 'כלים וממירים'], ['settings', 'settings', 'הגדרות וגיבוי']
+    ['', 'home', 'בית'], ['orders', 'orders', 'הזמנות'], ['production', 'calendar', 'תכנון ייצור'],
+    'h:לקוחות ומכירות', ['form', 'link', 'טופס הזמנות'], ['customers', 'users', 'לקוחות'], ['feedback', 'star', 'משובים'], ['coupons', 'tag', 'קופונים'], ['video', 'play', 'סטודיו סרטונים'],
+    'h:מטבח וכסף', ['recipes', 'book', 'מתכונים'], ['pantry', 'box', 'מחסן ומחירים'], ['expenses', 'wallet', 'הוצאות ורווחיות'], ['stats', 'chart', 'סטטיסטיקות'],
+    'h:עוד', ['assistant', 'spark', 'עוזרת AI'], ['wheel', 'wheel', 'גלגל החיים'], ['tools', 'scale', 'כלים וממירים'], ['settings', 'settings', 'הגדרות וגיבוי']
   ];
   const TABS = [['', 'home', 'בית'], ['orders', 'orders', 'הזמנות'], ['recipes', 'book', 'מתכונים'], ['stats', 'chart', 'נתונים']];
 
@@ -52,7 +54,7 @@
   const closeMenu = () => { document.getElementById('sidebar').classList.remove('open'); document.querySelector('.scrim').classList.remove('show'); };
 
   function buildNav() {
-    document.getElementById('nav').innerHTML = NAV.map(n => n === 'sep' ? '<div class="sep"></div>' :
+    document.getElementById('nav').innerHTML = NAV.map(n => typeof n === 'string' ? `<div class="nav-h">${n.slice(2)}</div>` :
       `<a href="#/${n[0]}" data-nav="${n[0]}">${A.icon(n[1])}<span>${n[2]}</span></a>`).join('');
     document.getElementById('tabbar').innerHTML = TABS.map(n => `<a href="#/${n[0]}" data-nav="${n[0]}">${A.icon(n[1])}<span>${n[2]}</span></a>`).join('') +
       `<button data-act="menu">${A.icon('menu')}<span>עוד</span></button>`;

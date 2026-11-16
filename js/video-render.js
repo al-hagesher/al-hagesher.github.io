@@ -68,7 +68,7 @@
     const size = Math.round(W * 0.058); ctx.font = `700 ${size}px "Assistant", sans-serif`;
     const lines = wrap(ctx, text, W * 0.78), lh = size * 1.25, w = Math.min(W * 0.86, Math.max(...lines.map(l => ctx.measureText(l).width)) + size * 1.4), h = lines.length * lh + size * 0.7;
     const x = (W - w) / 2, y = H * yFrac - h / 2, r = size * 0.6;
-    ctx.fillStyle = 'rgba(42,30,19,0.85)'; ctx.beginPath();
+    ctx.fillStyle = 'rgba(46,26,13,0.85)'; ctx.beginPath();
     ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); ctx.fill();
     ctx.fillStyle = '#f7ecdc'; lines.forEach((l, k) => ctx.fillText(l, W / 2, y + size * 0.35 + lh / 2 + k * lh));
     ctx.restore();
@@ -76,7 +76,7 @@
   // מסך סיום ממותג: רקע חום, לוגו שמנת, קריאה לפעולה
   function drawEnd(ctx, W, H, logo, cta, sub, t) {
     const g = ctx.createRadialGradient(W / 2, H * 0.42, 0, W / 2, H * 0.42, Math.max(W, H) * 0.75);
-    g.addColorStop(0, '#503c28'); g.addColorStop(0.55, '#3b2d1e'); g.addColorStop(1, '#26180e');
+    g.addColorStop(0, '#5e3720'); g.addColorStop(0.55, '#4a2a16'); g.addColorStop(1, '#2a160a');
     ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
     const a = ease(Math.min(1, t / 0.6));
     ctx.save(); ctx.globalAlpha = a;
@@ -103,14 +103,14 @@
     ctx.fillStyle = '#fff3df'; rrect(ctx, -w / 2, -h / 2, w, h, big * 0.42); ctx.fill();
     ctx.shadowColor = 'transparent'; ctx.strokeStyle = '#c99a4e'; ctx.lineWidth = Math.max(2, big * 0.07); rrect(ctx, -w / 2 + big * 0.12, -h / 2 + big * 0.12, w - big * 0.24, h - big * 0.24, big * 0.32); ctx.stroke();
     let y = -h / 2 + big * 0.22;
-    if (offer) { ctx.fillStyle = '#3b2d1e'; ctx.font = `800 ${big}px "Assistant", sans-serif`; ctx.fillText(offer, 0, y + big * 0.62, w - big * 0.6); y += big * 1.25; }
-    if (deadline) { ctx.fillStyle = '#80624a'; ctx.font = `700 ${small}px "Assistant", sans-serif`; ctx.fillText(deadline, 0, y + small * 0.7, w - big * 0.6); }
+    if (offer) { ctx.fillStyle = '#4a2a16'; ctx.font = `800 ${big}px "Assistant", sans-serif`; ctx.fillText(offer, 0, y + big * 0.62, w - big * 0.6); y += big * 1.25; }
+    if (deadline) { ctx.fillStyle = '#8c5f3f'; ctx.font = `700 ${small}px "Assistant", sans-serif`; ctx.fillText(deadline, 0, y + small * 0.7, w - big * 0.6); }
     ctx.restore();
   }
   // פרסומת: מסך סיום — לוגו, שם המוצר, מחיר, קריאה להזמנה, QR לטופס ותאריך אחרון
   function drawAdEnd(ctx, W, H, logo, qr, ad, t) {
     const g = ctx.createRadialGradient(W / 2, H * 0.45, 0, W / 2, H * 0.45, Math.max(W, H) * 0.75);
-    g.addColorStop(0, '#503c28'); g.addColorStop(0.55, '#3b2d1e'); g.addColorStop(1, '#26180e');
+    g.addColorStop(0, '#5e3720'); g.addColorStop(0.55, '#4a2a16'); g.addColorStop(1, '#2a160a');
     ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
     const u = Math.min(W, H * 0.6), gap = u * 0.04;
     ctx.save(); ctx.direction = 'rtl'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
@@ -271,7 +271,7 @@
           if (ad && t >= 3) drawOffer(ctx, W, H, ad.offer, ad.deadline, t - 3, opts.captions && opts.captions.pos === 'top' ? 0.56 : 0.2);
           if (s.caption) { const ct = t - tm.from, d = Math.min(s.dur, 2.2); drawCaption(ctx, W, H, s.caption, ct < 0.2 ? ct / 0.2 : ct > d - 0.25 ? Math.max(0, (d - ct) / 0.25) : 1, opts.captions && opts.captions.pos === 'middle' ? 0.42 : 0.6); }
           // מעבר רך אל מסך הסיום
-          if (i === segs.length - 1 && plan.endCard && tm.to - t < 0.35) { ctx.fillStyle = `rgba(38,24,14,${1 - (tm.to - t) / 0.35})`; ctx.fillRect(0, 0, W, H); }
+          if (i === segs.length - 1 && plan.endCard && tm.to - t < 0.35) { ctx.fillStyle = `rgba(42,22,10,${1 - (tm.to - t) / 0.35})`; ctx.fillRect(0, 0, W, H); }
         }
         // כתוביות מההקלטה — מעל הכל, גם על מסך הסיום אם עוד מדברים
         const cap = opts.captions; if (cap && cap.lines && cap.lines.length && A.voice) A.voice.draw(ctx, W, H, cap.lines, t - (cap.offset || 0), cap.look, cap.pos);

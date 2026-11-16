@@ -26,6 +26,10 @@
     cinematic: {
       name: 'סינמטי', desc: 'הילוך איטי, תנועת מצלמה עדינה, מעברי דהייה רכים ווינייטה חמה. לוקס שנראה כמו Bon Appétit.',
       cut: 3.0, beats: 8, speed: 0.8, trans: 'fade', transDur: 0.55, kb: 0.08, grade: 'film', hook: 1.4, reveal: 3.4, revealSpeed: 0.7, revealTrans: 'fade', keepOriginal: false, musicVol: 0.75, text: 'serif', bars: true
+    },
+    ad: {
+      name: 'פרסומת', desc: 'סרטון מכירה: המוצר מהשנייה הראשונה, מחיר או מבצע על המסך, ובסוף מסך הזמנה עם QR לטופס ותאריך אחרון להזמנה.',
+      cut: 1.4, beats: 2, speed: 1.3, trans: 'fade', transDur: 0.15, kb: 0.05, grade: 'vivid', hook: 1.2, reveal: 2.6, revealSpeed: 0.75, revealTrans: 'fade', revealZoom: 0.1, keepOriginal: false, musicVol: 0.8, text: 'bold', ad: true
     }
   };
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -42,7 +46,9 @@
     const fullTarget = clamp(+opts.target || 30, 5, 180);
     // תמונות מוגמרות לסיום (אחרי חשיפת המוצר, לפני מסך הסיום): זמן קבוע לכל תמונה לפי הסגנון, עד 40% מהסרטון
     const nPh = Math.max(0, Math.min(10, opts.photos | 0));
-    let phDur = nPh ? ({ calm: 2.4, rhythm: 1.3, recipe: 2, reveal: 2.2, cinematic: 2.8 }[opts.style] || 2) : 0;
+    let phDur = nPh ? ({ calm: 2.4, rhythm: 1.3, recipe: 2, reveal: 2.2, cinematic: 2.8, ad: 1.8 }[opts.style] || 2) : 0;
+    // פרסומת: מסך הסיום (QR + הזמנה) ארוך מספיק כדי להספיק לסרוק
+    const endLen = t => S.ad ? (t >= 12 ? 3.5 : 2.5) : (t >= 12 ? 2 : 1.2);
     if (nPh && nPh * phDur > fullTarget * 0.4) phDur = Math.max(0.8, fullTarget * 0.4 / nPh);
     const target = fullTarget - nPh * phDur;
     const beat = opts.bpm ? 60 / opts.bpm : null;
@@ -75,7 +81,7 @@
     if (!valid.length) {
       if (!nPh) return { segments: [], endCard: 0, total: 0, style: opts.style };
       // רק תמונות — מצגת: כל הזמן מתחלק בין התמונות
-      const end = fullTarget >= 12 ? 2 : 1.2, d = r3(Math.max(0.8, (fullTarget - end) / nPh)), segs = Array.from({ length: nPh }, (_, k) => photoSeg(k, d, S));
+      const end = endLen(fullTarget), d =r3(Math.max(0.8, (fullTarget - end) / nPh)), segs = Array.from({ length: nPh }, (_, k) => photoSeg(k, d, S));
       return { segments: segs, endCard: r3(Math.max(end, fullTarget - d * nPh)), total: r3(fullTarget), style: opts.style, styleDef: S, hookText: '', hints: focusHints, summary: { slow: 0, fast: 0, analyzed: false, shortBy: 0 } };
     }
     // בחירת hero חכמה: המשתמשת סימנה ⭐, או הקליפ הסטטי+בהיר ביותר (לפי ניתוח), או האחרון
@@ -89,7 +95,7 @@
       return scored[0]?.c || valid[valid.length - 1];
     };
     const heroC = chooseHero();
-    const endCard = opts.endCard === false ? 0 : (target >= 12 ? 2 : 1.2);
+    const endCard = opts.endCard === false ? 0 : endLen(target);
     let hook = opts.hook === false || valid.length < 2 ? 0 : q(S.hook, 2);
     let reveal = q(S.reveal, 4);
     // התיאור מכתיב דגשים: "חשיפה" מאריך את הסוף, "קצר" מקצר חיתוכים, וכו׳

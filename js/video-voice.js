@@ -152,7 +152,7 @@
     box: { name: 'בתיבה — קריא במיוחד', maxWords: 4, maxChars: 24 },
     clean: { name: 'נקי ופשוט', maxWords: 5, maxChars: 28 }
   };
-  V.lookFor = style => ({ rhythm: 'pop', reveal: 'pop', recipe: 'box', calm: 'soft', cinematic: 'soft' }[style] || 'clean');
+  V.lookFor = style => ({ rhythm: 'pop', reveal: 'pop', ad: 'pop', recipe: 'box', calm: 'soft', cinematic: 'soft' }[style] || 'clean');
   const POS = { bottom: 0.74, middle: 0.56, top: 0.2 };
   const easeOut = x => 1 - Math.pow(1 - clamp(x, 0, 1), 3);
 

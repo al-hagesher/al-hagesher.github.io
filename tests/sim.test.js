@@ -2,7 +2,7 @@
 const fs = require('fs'), path = require('path'), vm = require('vm'), assert = require('assert');
 const ctx = { console, Intl, TextEncoder, TextDecoder, btoa: s => Buffer.from(s, 'binary').toString('base64'), atob: s => Buffer.from(s, 'base64').toString('binary') };
 ctx.window = ctx; vm.createContext(ctx);
-['js/core.js', 'js/seed.js', 'js/library.js', 'js/sync.js', 'js/pages/production.js', 'tests/demo-fixture.js', 'js/video-plan.js', 'js/video-analyze.js', 'js/video-voice.js', 'js/music.js', 'js/receipts.js', 'js/pages/feedback.js'].forEach(f => vm.runInContext(fs.readFileSync(path.join(__dirname, '..', f), 'utf8'), ctx, { filename: f }));
+['js/core.js', 'js/seed.js', 'js/library.js', 'js/sync.js', 'js/pages/production.js', 'tests/demo-fixture.js', 'js/video-plan.js', 'js/video-analyze.js', 'js/video-voice.js', 'js/music.js', 'js/receipts.js', 'js/pages/feedback.js', 'js/pages/video.js'].forEach(f => vm.runInContext(fs.readFileSync(path.join(__dirname, '..', f), 'utf8'), ctx, { filename: f }));
 const A = ctx.App, U = A.util, C = A.calc;
 let n = 0; const t = (name, fn) => { fn(); n++; console.log('✓', name); };
 const near = (a, b, eps = 0.01, msg) => assert.ok(Math.abs(a - b) <= eps, `${msg || ''} expected ${b}, got ${a}`);
@@ -419,7 +419,7 @@ t('עריכת סרטונים: מזהה מה לחתוך, מה להאיץ ומה �
   const clips = [{ duration: 14, analysis: an }, { duration: 6, hero: true, analysis: A.finishAnalysis(hf, 6) }];
   for (const style of Object.keys(A.VIDEO_STYLES)) for (const target of [15, 30]) {
     const p = A.planEdit(clips, { target, style });
-    near(p.total + p.summary.shortBy, target, 0.06, `${style} ${target}`); assert.ok(p.endCard <= 3.6, 'מסך סיום לא מנופח');
+    near(p.total + p.summary.shortBy, target, 0.06, `${style} ${target}`); assert.ok(p.endCard <= (A.VIDEO_STYLES[style].ad ? 5 : 3.6), 'מסך סיום לא מנופח');
     const inBad = s => an.moments.some(m => (m.kind === 'bad') && s.start + s.dur * s.speed / 2 > m.a && s.start + s.dur * s.speed / 2 < m.b);
     p.segments.filter(s => s.clip === 0).forEach(s => assert.ok(!inBad(s), `${style}/${target}: קטע באמצע אזור פסול ${JSON.stringify(s)}`));
     const covers = (s, t) => s.start <= t && s.start + s.dur * s.speed >= t;
@@ -575,5 +575,21 @@ t('משובים: ברירת מחדל, מיזוג בין מכשירים, קליט
   assert.ok(ins.lowWords.some(([w]) => w === 'האריזה' || w === 'נמעכה'));
   assert.ok(ins.highWords.some(([w]) => w === 'אוורירי'));
   assert.strictEqual(ins.care, 3);
+});
+t('פרסומת: מסך הזמנה ארוך לסריקה, ותאריך אחרון להזמנה מטופס ההזמנות', () => {
+  const clips = [{ duration: 6 }, { duration: 5 }, { duration: 8, hero: true }];
+  const p = A.planEdit(clips, { target: 15, style: 'ad' });
+  near(p.endCard, 3.5, 0.05); near(p.total, 15, 0.05);
+  near(A.planEdit(clips, { target: 15, style: 'rhythm' }).endCard, 2, 0.05);
+  assert.ok(A.VIDEO_STYLES.ad.ad && A.voice.lookFor('ad') === 'pop');
+  const f = { enabled: true, leadDays: 1, cutoffTime: '18:00', onlyDates: [], blocked: [], days: { 5: { on: true } } };
+  const d1 = A.adDeadline(f, '2026-11-16', '10:00');
+  assert.ok(/^הזמנות לשישי .*20.* — עד יום חמישי ב־18:00$/.test(d1), d1);
+  // ביום חמישי אחרי 18:00 — כבר השישי הבא
+  const d2 = A.adDeadline(f, '2026-11-19', '19:00'); assert.ok(/27/.test(d2), d2);
+  assert.ok(/עד היום ב־18:00/.test(A.adDeadline(f, '2026-11-19', '12:00')));
+  // תאריכים מסוימים בלבד, וטופס כבוי
+  assert.ok(/ראשון/.test(A.adDeadline(Object.assign({}, f, { onlyDates: ['2026-11-22'] }), '2026-11-16', '10:00')));
+  assert.strictEqual(A.adDeadline(Object.assign({}, f, { enabled: false }), '2026-11-16', '10:00'), '');
 });
 console.log(`\n${n} בדיקות עברו`);

@@ -5,7 +5,47 @@
   const st = {
     clips: [], photos: [], voice: null, edit: null,
     target: 30, style: 'calm', format: '9:16', hq: false, title: '', description: '', cta: 'להזמנות — הקישור בפרופיל 🤎',
-    music: 'auto', keepOriginal: null, customMusic: null, result: null, rendering: false, autoSpeed: true
+    music: 'auto', keepOriginal: null, customMusic: null, result: null, rendering: false, autoSpeed: true,
+    ad: { product: '', headline: '', offer: '', deadline: null, cta: 'להזמנה — סרקי את הקוד 👇', qr: true }
+  };
+
+  // ---------- פרסומת ----------
+  const formOn = () => !!(A.state.form && A.state.form.enabled && A.state.form.slug && A.form && A.form.link);
+  // התאריך האחרון להזמנה לפי טופס ההזמנות (ימים פתוחים / תאריכים מסוימים, "ימים מראש" ושעת סגירה)
+  A.adDeadline = (f, today, nowHM) => {
+    if (!f || !f.enabled) return '';
+    const lead = +f.leadDays || 0, only = (f.onlyDates || []).filter(d => d >= today).sort();
+    const open = d => only.length ? only.includes(d) : !!((f.days || {})[U.parse(d).getDay()] || {}).on && !(f.blocked || []).includes(d);
+    for (let i = 0; i < 70; i++) {
+      const d = U.addDays(today, i); if (!open(d)) continue;
+      const last = U.addDays(d, -lead);
+      if (last < today || (last === today && f.cutoffTime && nowHM >= f.cutoffTime)) continue;
+      return `הזמנות ל${U.dayName(d)} ${U.fmtDate(d)} — עד ${last === d ? 'אותו יום' : last === today ? 'היום' : 'יום ' + U.dayName(last)}${f.cutoffTime ? ' ב־' + f.cutoffTime : ''}`;
+    }
+    return '';
+  };
+  const nowHM = () => { const p = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Jerusalem', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date()); return p; };
+  const adDl = () => st.ad.deadline == null ? A.adDeadline(A.state.form, U.today(), nowHM()) : st.ad.deadline;
+  const adProducts = () => formOn() && A.form.items ? A.form.items().filter(i => i.on && i.price > 0 && i.name) : [];
+  const adCard = () => {
+    const prods = adProducts(), a = st.ad;
+    return `<div class="card"><div class="card-h"><h3>${A.icon('tag')}פרטי הפרסומת</h3></div>
+      <div class="form-grid">
+        ${prods.length ? `<label class="field full"><span>מילוי אוטומטי ממוצר בטופס</span><select data-ad="product">${A.opts([['', 'בחירת מוצר…'], ...prods.map(p => [p.key, `${p.name} · ${U.money(p.price)}`])], a.product)}</select></label>` : ''}
+        <label class="field full"><span>כותרת — מופיעה בפתיחה ובסיום</span><input data-ad="headline" value="${U.esc(a.headline)}" placeholder="למשל: סופגניות דובאי 🤍" maxlength="60"></label>
+        <label class="field full"><span>מחיר או מבצע — "מדבקה" על הסרטון</span><input data-ad="offer" value="${U.esc(a.offer)}" placeholder="למשל: ₪15 לסופגנייה · 4 ב־₪55" maxlength="40"></label>
+        <label class="field full"><span>עד מתי אפשר להזמין</span><input data-ad="deadline" value="${U.esc(adDl())}" placeholder="למשל: הזמנות לשישי עד חמישי ב־18:00" maxlength="60">${st.ad.deadline == null && adDl() ? '<small>חושב אוטומטית מטופס ההזמנות</small>' : ''}</label>
+        <label class="field full"><span>קריאה לפעולה במסך הסיום</span><input data-ad="cta" value="${U.esc(a.cta)}" maxlength="60"></label>
+        ${formOn() ? `<label class="row full" style="gap:8px"><input type="checkbox" data-ad="qr" ${a.qr ? 'checked' : ''}> QR לטופס ההזמנות במסך הסיום (סורקים ומזמינים)</label>`
+          : '<p class="small muted full" style="margin:0">כשטופס ההזמנות פעיל, אפשר להוסיף למסך הסיום QR שמוביל ישר להזמנה.</p>'}
+      </div>
+      <p class="small muted" style="margin:8px 0 0">טיפ: לפרסומת עובד הכי טוב סרטון קצר (15 ש׳). המוצר המוגמר בפתיחה, ותהליך קצר באמצע.</p></div>`;
+  };
+  const adOpts = async () => {
+    if (st.style !== 'ad') return null;
+    const a = st.ad; let qr = null;
+    if (a.qr && formOn() && A.fb && A.fb.qrDataUrl) { try { qr = await A.fb.qrDataUrl(A.form.link(), 480); } catch (e) { } }
+    return { headline: (a.headline || st.title || '').trim(), offer: a.offer.trim(), deadline: String(adDl() || '').trim(), cta: (a.cta || '').trim(), qr };
   };
   let previewAudio = null, signal = null;
   const clone = o => JSON.parse(JSON.stringify(o));
@@ -168,12 +208,13 @@
             <div class="stack" style="margin-top:12px">${Object.entries(A.VIDEO_STYLES).map(([k, v]) => `<label class="card flat" style="padding:10px 12px;cursor:pointer;display:flex;gap:10px;align-items:flex-start;${st.style === k ? 'border-color:var(--brown);box-shadow:0 0 0 1px var(--brown) inset' : ''}">
               <input type="radio" name="vstyle" value="${k}" ${st.style === k ? 'checked' : ''} style="margin-top:4px"><div><b>${v.name}</b><div class="small muted">${v.desc}</div></div></label>`).join('')}</div>
           </div>
+          ${st.style === 'ad' ? adCard() : ''}
           ${voiceCard()}
           <div class="card"><div class="card-h"><h3>3. טקסטים ומוזיקה</h3></div>
             <div class="form-grid">
               <label class="field full"><span>תיאור הסרטון — לפיו העורך בוחר מה להדגיש</span><textarea data-f="description" rows="2" placeholder="למשל: רילס לבאבקה שוקולד. רוצה שהצופה ירגיש את הטקסטורה המושלמת של הבצק המוכן ואת הנזילה של השוקולד — הדגש על קלוז-אפים.">${U.esc(st.description)}</textarea><small>מכוון את העורך — איזה קליפים להעדיף, איזה כיתובים לכתוב, ומה לשים בהוק</small></label>
-              <label class="field full"><span>כותרת פתיחה (הוק) — אופציונלי</span><input data-f="title" value="${U.esc(st.title)}" placeholder="אם ריק — נגזרת מהתיאור"></label>
-              <label class="field full"><span>טקסט בסיום</span><input data-f="cta" value="${U.esc(st.cta)}"></label>
+              ${st.style === 'ad' ? '' : `<label class="field full"><span>כותרת פתיחה (הוק) — אופציונלי</span><input data-f="title" value="${U.esc(st.title)}" placeholder="אם ריק — נגזרת מהתיאור"></label>
+              <label class="field full"><span>טקסט בסיום</span><input data-f="cta" value="${U.esc(st.cta)}"></label>`}
               <label class="field"><span>מוזיקה</span><select data-f="music">${A.opts([['auto', `אוטומטית לפי הסגנון${mu && st.music === 'auto' ? ` (${mu.title})` : ''}`], ...A.MUSIC.map(m => [m.id, `${m.title} · ${m.mood}`]), ['custom', 'קובץ שלי…'], ['none', 'בלי מוזיקה']], st.music)}</select>${st.voice && st.music !== 'none' ? '<small>המוזיקה יורדת אוטומטית כשמדברים</small>' : ''}</label>
               <div class="field"><span>&nbsp;</span><div class="row">${mu ? `<button class="btn sm ghost" data-act="preview">${A.icon(previewAudio && !previewAudio.paused ? 'x' : 'play')}${previewAudio && !previewAudio.paused ? 'עצירה' : 'האזנה'}</button>` : ''}
                 ${st.music === 'custom' ? `<label class="btn sm soft">${A.icon('upload')}${st.customMusic ? U.esc(st.customMusic.name.slice(0, 18)) : 'בחירת קובץ'}<input type="file" accept="audio/*" data-audio hidden></label>` : ''}</div></div>
@@ -226,6 +267,16 @@
           A.refresh(); return;
         }
         if (f.matches('[data-votext]') && st.voice) { st.voice.text = f.value; return; }
+        if (f.dataset.ad) {
+          const k = f.dataset.ad;
+          if (k === 'product') {
+            st.ad.product = f.value; const p = adProducts().find(x => x.key === f.value);
+            const unit = String(p && p.unit || '').replace(/\s*\([^)]*\)\s*/g, ' ').trim();
+            if (p) { st.ad.headline = p.name; st.ad.offer = `${U.money(p.price)}${unit && unit.length <= 10 ? ' ל' + unit : ''}`; if (!st.description.trim()) st.description = `פרסומת ל${p.name}. המוצר המוגמר בפתיחה, קלוז-אפים מגרים.`; }
+          } else if (k === 'qr') st.ad.qr = f.checked;
+          else st.ad[k] = f.value;
+          A.refresh(); return;
+        }
         if (f.name === 'vstyle') { st.style = f.value; st.keepOriginal = null; if (st.voice && st.voice.look === 'auto') regroup(); A.refresh(); return; }
         const k = f.dataset.f; if (!k) return;
         if (k === 'target') st.target = Math.max(5, Math.min(180, U.num(f.value) || 30));
@@ -235,7 +286,7 @@
         else st[k] = f.value;
         stopPreview(); A.refresh();
       };
-      main.oninput = e => { const c = e.target.dataset.cap; if (c != null) st.clips[+c].caption = e.target.value; if (e.target.matches('[data-votext]') && st.voice) st.voice.text = e.target.value; };
+      main.oninput = e => { const ak = e.target.dataset.ad; if (ak && ak !== 'product' && ak !== 'qr') { st.ad[ak] = e.target.value; return; } const c = e.target.dataset.cap; if (c != null) st.clips[+c].caption = e.target.value; if (e.target.matches('[data-votext]') && st.voice) st.voice.text = e.target.value; };
       main.onclick = async e => {
         const b = e.target.closest('button'); if (!b) return;
         const d = b.dataset;
@@ -464,10 +515,12 @@
     if (need > p.total) { p.endCard = U.round((+p.endCard || 0) + need - p.total, 3); p.total = U.round(need, 3); }
     return p;
   };
-  function preview() {
+  const titleFor = (plan, ad) => ad ? (ad.headline || plan.hookText || '') : (st.title || plan.hookText || '');
+  async function preview() {
     stopPreview();
     let audioContext = null; try { audioContext = new (root.AudioContext || root.webkitAudioContext)(); audioContext.resume(); } catch (e) { }
     const mu = musicFor(), S = A.VIDEO_STYLES[st.style], plan = finalPlan(mu); if (!plan || !plan.segments.length) return;
+    const ad = await adOpts();
     const sig = { cancelled: false };
     A.modal({
       title: 'תצוגה מקדימה', size: 'narrow',
@@ -479,7 +532,7 @@
       onClose: () => { sig.cancelled = true; }
     });
     const canvas = document.getElementById('pvCanvas');
-    A.renderVideo(canvas, st.clips, plan, Object.assign(renderOpts(mu, S), { title: st.title || plan.hookText || '', audioContext, preview: true }),
+    A.renderVideo(canvas, st.clips, plan, Object.assign(renderOpts(mu, S), { title: titleFor(plan, ad), ad, audioContext, preview: true }),
       p => { const el = document.getElementById('pvProg'); if (el) el.style.width = (p * 100) + '%'; }, sig).catch(err => { console.error(err); A.toast('התצוגה נכשלה: ' + (err.message || '')); });
   }
   function resultCard() {
@@ -508,6 +561,7 @@
     let audioContext = null; try { audioContext = new (root.AudioContext || root.webkitAudioContext)(); audioContext.resume(); } catch (e) { }
     const mu = musicFor(), S = A.VIDEO_STYLES[st.style], plan = finalPlan(mu);
     if (!plan || !plan.segments.length) return;
+    const ad = await adOpts();
     signal = { cancelled: false };
     A.modal({
       title: 'עורכת את הסרטון…', size: 'narrow',
@@ -520,7 +574,7 @@
     });
     const canvas = document.getElementById('vcanvas'); st.rendering = true;
     try {
-      const out = await A.renderVideo(canvas, st.clips, plan, Object.assign(renderOpts(mu, S), { title: st.title || plan.hookText || '', audioContext }),
+      const out = await A.renderVideo(canvas, st.clips, plan, Object.assign(renderOpts(mu, S), { title: titleFor(plan, ad), ad, audioContext }),
         p => { const pr = document.getElementById('vprog'), tx = document.getElementById('vtxt'); if (pr) pr.style.width = (p * 100) + '%'; if (tx) tx.textContent = `${Math.round(p * 100)}%`; }, signal);
       st.rendering = false;
       if (!out) { A.toast('העריכה בוטלה'); return; }

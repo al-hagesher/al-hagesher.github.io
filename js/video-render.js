@@ -88,6 +88,57 @@
     ctx.restore();
   }
 
+  const rrect = (ctx, x, y, w, h, r) => { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); };
+  // פרסומת: "מדבקת" מחיר/מבצע שקופצת אחרי הכותרת ונשארת עד מסך הסיום
+  function drawOffer(ctx, W, H, offer, deadline, t, yFrac) {
+    if (!offer && !deadline) return;
+    const a = Math.min(1, t / 0.35), pop = a < 1 ? 0.7 + 0.3 * (1 - Math.pow(1 - a, 3)) * (1 + 0.12 * Math.sin(a * Math.PI)) : 1;
+    ctx.save(); ctx.globalAlpha = a; ctx.direction = 'rtl'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const u = Math.min(W, H * 0.62), big = Math.round(u * 0.068), small = Math.round(u * 0.042);
+    ctx.font = `800 ${big}px "Assistant", sans-serif`; const ow = offer ? ctx.measureText(offer).width : 0;
+    ctx.font = `700 ${small}px "Assistant", sans-serif`; const dw = deadline ? ctx.measureText(deadline).width : 0;
+    const w = Math.min(W * 0.9, Math.max(ow, dw) + big * 1.3), h = (offer ? big * 1.25 : 0) + (deadline ? small * 1.45 : 0) + big * 0.45;
+    ctx.translate(W / 2, H * yFrac); ctx.rotate(-0.035); ctx.scale(pop, pop);
+    ctx.shadowColor = 'rgba(0,0,0,0.35)'; ctx.shadowBlur = big * 0.5; ctx.shadowOffsetY = big * 0.12;
+    ctx.fillStyle = '#fff3df'; rrect(ctx, -w / 2, -h / 2, w, h, big * 0.42); ctx.fill();
+    ctx.shadowColor = 'transparent'; ctx.strokeStyle = '#c99a4e'; ctx.lineWidth = Math.max(2, big * 0.07); rrect(ctx, -w / 2 + big * 0.12, -h / 2 + big * 0.12, w - big * 0.24, h - big * 0.24, big * 0.32); ctx.stroke();
+    let y = -h / 2 + big * 0.22;
+    if (offer) { ctx.fillStyle = '#3b2d1e'; ctx.font = `800 ${big}px "Assistant", sans-serif`; ctx.fillText(offer, 0, y + big * 0.62, w - big * 0.6); y += big * 1.25; }
+    if (deadline) { ctx.fillStyle = '#80624a'; ctx.font = `700 ${small}px "Assistant", sans-serif`; ctx.fillText(deadline, 0, y + small * 0.7, w - big * 0.6); }
+    ctx.restore();
+  }
+  // פרסומת: מסך סיום — לוגו, שם המוצר, מחיר, קריאה להזמנה, QR לטופס ותאריך אחרון
+  function drawAdEnd(ctx, W, H, logo, qr, ad, t) {
+    const g = ctx.createRadialGradient(W / 2, H * 0.45, 0, W / 2, H * 0.45, Math.max(W, H) * 0.75);
+    g.addColorStop(0, '#503c28'); g.addColorStop(0.55, '#3b2d1e'); g.addColorStop(1, '#26180e');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    const u = Math.min(W, H * 0.6), gap = u * 0.04;
+    ctx.save(); ctx.direction = 'rtl'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const headS = Math.round(u * 0.075), offS = Math.round(u * 0.088), ctaS = Math.round(u * 0.05), dlS = Math.round(u * 0.042), qrS = qr ? u * 0.4 : 0, logoH = logo ? u * 0.15 : 0;
+    ctx.font = `800 ${headS}px "Assistant", sans-serif`; const head = ad.headline ? wrap(ctx, ad.headline, W * 0.84).slice(0, 2) : [];
+    ctx.font = `600 ${ctaS}px "Assistant", sans-serif`; const cta = ad.cta ? wrap(ctx, ad.cta, W * 0.84).slice(0, 2) : [];
+    const parts = [logoH && { h: logoH, k: 'logo' }, head.length && { h: head.length * headS * 1.15, k: 'head' }, ad.offer && { h: offS * 1.1, k: 'offer' }, cta.length && { h: cta.length * ctaS * 1.3, k: 'cta' }, qr && { h: qrS + qrS * 0.16, k: 'qr' }, ad.deadline && { h: dlS * 1.3, k: 'dl' }].filter(Boolean);
+    const total = parts.reduce((s, p) => s + p.h, 0) + gap * (parts.length - 1);
+    let y = Math.max(H * 0.05, (H - total) / 2);
+    parts.forEach((p, k) => {
+      // כל שורה נכנסת קצת אחרי הקודמת
+      const a = ease(Math.max(0, Math.min(1, (t - k * 0.12) / 0.45)));
+      ctx.globalAlpha = a; const dy = (1 - a) * u * 0.03;
+      if (p.k === 'logo') { const lw = logoH * logo.width / logo.height; ctx.drawImage(logo, (W - lw) / 2, y + dy, lw, logoH); }
+      if (p.k === 'head') { ctx.fillStyle = '#fffaf2'; ctx.font = `800 ${headS}px "Assistant", sans-serif`; head.forEach((l, i) => ctx.fillText(l, W / 2, y + dy + headS * 0.58 + i * headS * 1.15)); }
+      if (p.k === 'offer') { ctx.fillStyle = '#e9c27a'; ctx.font = `800 ${offS}px "Assistant", sans-serif`; ctx.fillText(ad.offer, W / 2, y + dy + offS * 0.55, W * 0.9); }
+      if (p.k === 'cta') { ctx.fillStyle = '#f4e8d8'; ctx.font = `600 ${ctaS}px "Assistant", sans-serif`; cta.forEach((l, i) => ctx.fillText(l, W / 2, y + dy + ctaS * 0.65 + i * ctaS * 1.3)); }
+      if (p.k === 'qr') {
+        const pad = qrS * 0.08, pulse = 1 + 0.018 * Math.sin(Math.max(0, t - 0.8) * 4), s = qrS * pulse, x = (W - s) / 2, yy = y + dy + (qrS - s) / 2;
+        ctx.fillStyle = '#ffffff'; rrect(ctx, x - pad, yy - pad, s + pad * 2, s + pad * 2, pad * 1.6); ctx.fill();
+        ctx.imageSmoothingEnabled = false; ctx.drawImage(qr, x, yy, s, s); ctx.imageSmoothingEnabled = true;
+      }
+      if (p.k === 'dl') { ctx.fillStyle = '#d9c3a5'; ctx.font = `700 ${dlS}px "Assistant", sans-serif`; ctx.fillText(ad.deadline, W / 2, y + dy + dlS * 0.65, W * 0.9); }
+      y += p.h + gap;
+    });
+    ctx.restore();
+  }
+
   /**
    * רינדור. clips: [{url}], plan: מ-planEdit, opts: {format, hq, title, cta, sub, musicUrl, musicVol, keepOriginal}
    * מחזיר {blob, mime, ext}. onFrame(progress 0..1). signal.cancelled = true עוצר.
@@ -99,6 +150,7 @@
     const S = plan.styleDef || {};
     try { await Promise.all([document.fonts.load(`500 60px "Frank Ruhl Libre"`), document.fonts.load(`800 60px "Assistant"`), document.fonts.load(`600 40px "Assistant"`)]); } catch (e) { }
     const logo = await loadImg('assets/logo-cream.png');
+    const ad = opts.ad || null, adQr = ad && ad.qr ? await loadImg(ad.qr) : null;
     // קליפים: נגן נפרד לכל קליפ (נטען מראש) — מעברים חלקים בלי מסך שחור
     // שני נגנים לכל קליפ: בזמן שאחד מנגן, השני כבר מחכה על הקטע הבא — חיתוך נקי בלי המתנה לחיפוש
     const used = new Set(plan.segments.filter(s => s.photo == null).map(s => s.clip));
@@ -199,7 +251,7 @@
         if (t >= total) { resolve(); return; }
         let i = times.findIndex(x => t < x.to); if (i < 0) i = segs.length;
         if (i !== cur && i < segs.length) { cur = i; startSeg(i); }
-        if (i >= segs.length) { if (playing) { playing.pause(); playing = null; } drawEnd(ctx, W, H, logo, opts.cta, opts.sub, t - endFrom); }
+        if (i >= segs.length) { if (playing) { playing.pause(); playing = null; } if (ad) drawAdEnd(ctx, W, H, logo, adQr, ad, t - endFrom); else drawEnd(ctx, W, H, logo, opts.cta, opts.sub, t - endFrom); }
         else {
           const s = segs[i], tm = times[i], p = (t - tm.from) / s.dur, v = segEl[i];
           const zoom = s.zoomFrom + (s.zoomTo - s.zoomFrom) * ease(Math.min(1, Math.max(0, p)));
@@ -215,6 +267,8 @@
           // כותרת בשניות הראשונות
           if (t < 3) drawTitle(ctx, W, H, opts.title, t < 0.25 ? t / 0.25 : t > 2.5 ? (3 - t) / 0.5 : 1, S.text);
           // כיתוב שלב
+          // פרסומת: מחיר/מבצע אחרי הכותרת (למעלה; למטה אם הכתוביות למעלה)
+          if (ad && t >= 3) drawOffer(ctx, W, H, ad.offer, ad.deadline, t - 3, opts.captions && opts.captions.pos === 'top' ? 0.56 : 0.2);
           if (s.caption) { const ct = t - tm.from, d = Math.min(s.dur, 2.2); drawCaption(ctx, W, H, s.caption, ct < 0.2 ? ct / 0.2 : ct > d - 0.25 ? Math.max(0, (d - ct) / 0.25) : 1, opts.captions && opts.captions.pos === 'middle' ? 0.42 : 0.6); }
           // מעבר רך אל מסך הסיום
           if (i === segs.length - 1 && plan.endCard && tm.to - t < 0.35) { ctx.fillStyle = `rgba(38,24,14,${1 - (tm.to - t) / 0.35})`; ctx.fillRect(0, 0, W, H); }

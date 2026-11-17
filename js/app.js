@@ -71,6 +71,18 @@
   root.addEventListener('beforeinstallprompt', e => { e.preventDefault(); A.install.prompt = e; if (A.route().page === 'settings') A.refresh(); });
   root.addEventListener('appinstalled', () => { A.install.prompt = null; A.toast('האפליקציה הותקנה 🎉'); });
 
+  // גרסה חדשה באתר: מרעננים לבד (כשאין חלון עריכה פתוח), כדי שגרסה ישנה שנשארה פתוחה לא תשמור טופס ישן
+  const VER = (() => { try { return new URL(document.currentScript.src).searchParams.get('v') || ''; } catch (e) { return ''; } })();
+  A.checkUpdate = async () => {
+    if (!VER || !location.protocol.startsWith('http') || !navigator.onLine) return;
+    try {
+      const m = (await (await fetch('sw.js?check=' + Date.now(), { cache: 'no-store' })).text()).match(/al-hagesher-(\d+)/);
+      if (!m || m[1] === VER) return;
+      try { if (sessionStorage.getItem('ag-upd') === m[1]) return; sessionStorage.setItem('ag-upd', m[1]); } catch (e) { return; }
+      const d = document.getElementById('modal'); if (d && d.open) { try { sessionStorage.removeItem('ag-upd'); } catch (e) { } return; }
+      A.save && A.save(); location.reload();
+    } catch (e) { }
+  };
   A.start = async () => {
     buildNav();
     await A.load();
@@ -88,6 +100,8 @@
       }, Math.max(0, 900 - (performance.now() - t0))));
     }
     if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => { });
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') A.checkUpdate(); });
+    setInterval(A.checkUpdate, 10 * 60 * 1000);
   };
   document.addEventListener('DOMContentLoaded', A.start);
 })(window);

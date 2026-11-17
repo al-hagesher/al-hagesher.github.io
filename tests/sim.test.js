@@ -203,6 +203,17 @@ t('סנכרון טופס: שני מכשירים עם טפסים שונים — �
   // טופס קיים ישן בלי מינימום מקבל 4 סופגניות; טופס שהוגדר בו 0 נשאר 0
   assert.strictEqual(A.normalize({ form: { enabled: true, slug: 'x' } }).form.minItems, 4);
   assert.strictEqual(A.normalize({ form: { enabled: true, slug: 'x', minItems: 0 } }).form.minItems, 0);
+  // מינימום "או": טופס קיים עם 4 סופגניות מקבל "4 סופגניות או ₪32"; טופס בלי מינימום לא מקבל מינימום סכום
+  const e1 = A.normalize({ form: { enabled: true, slug: 'x', minItems: 4 } }).form;
+  assert.ok(e1.minEither && e1.minOrder === 32 && e1.minItems === 4);
+  const e0 = A.normalize({ form: { enabled: true, slug: 'x', minItems: 0 } }).form;
+  assert.ok(!e0.minEither && !e0.minOrder);
+  assert.strictEqual(A.normalize({ form: { enabled: true, slug: 'x', minItems: 4, minEither: false, minOrder: 0 } }).form.minOrder, 0, 'מי שכיבתה — נשאר כבוי');
+  // מארז המבצע נוסף פעם אחת, בראש הטופס, ולא חוזר אחרי מחיקה
+  const d1 = A.normalize({ form: { enabled: true, slug: 'x' } }).form;
+  const box = d1.customProducts.find(c => c.id === 'deal6box');
+  assert.ok(box && box.pack === 6 && box.price === 36 && box.options.length === 2 && d1.order[0] === 'c:deal6box');
+  d1.customProducts = []; assert.ok(!A.normalize({ form: d1 }).form.customProducts.length, 'אחרי מחיקה לא חוזר');
 });
 
 t('קופונים: שימושים נספרים מההזמנות, חד־פעמי לכל לקוחה והזמנה ראשונה', () => {

@@ -5,6 +5,8 @@
   const SB_KEY = 'sb_publishable_VYxvnQePn2dITBiFCyEAhA_Og_aEgPR';
   const F = A.form = { pubStatus: 'idle', pubError: '', lastPub: null };
   const fs = () => A.state.form;
+  // מינימום "או": מספיק לעמוד במינימום היחידות או במינימום הסכום (רק כששניהם מוגדרים)
+  const minAny = f => !!f.minEither && +f.minItems > 1 && +f.minOrder > 0;
 
   async function rpc(fn, body) {
     const r = await fetch(`${SB_URL}/rest/v1/rpc/${fn}`, { method: 'POST', headers: { apikey: SB_KEY, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -66,6 +68,7 @@
       const p = it.p, prod = {
         id: it.id, name: it.name, desc: it.desc, price: it.price, unit: it.unit, cat: it.cat,
         img: it.image ? await thumb(it.image) : '', options: (p.options || []).filter(Boolean), maxQty: +p.maxQty || 20, allergens: it.allergens,
+        pack: (p.options || []).filter(Boolean).length && +p.pack > 1 ? Math.min(50, Math.round(+p.pack)) : 0,
         kosher: KOSHER[p.kosher] ? p.kosher : '', badge: (p.badge || '').trim(), note: (p.note || '').trim()
       };
       if (it.kind === 'c') prod.custom = true;
@@ -80,7 +83,7 @@
       v: 2, bizName: s.businessName, phone: U.phoneIntl(s.phone), open: !!f.open, closedMsg: f.closedMsg, title: f.title, intro: f.intro,
       pickupAddress: f.pickupAddress, payInfo: f.payInfo, terms: f.terms, cancellationPolicy: s.cancellationPolicy || '', leadDays: +f.leadDays || 0, maxDaysAhead: +f.maxDaysAhead || 30,
       capacity: +f.capacity || 0, slotMinutes: +f.slotMinutes || 0, minOrder: +f.minOrder || 0,
-      minItems: Math.max(0, Math.round(+f.minItems || 0)), minItemsWord: String(f.minItemsWord || '').trim().slice(0, 20),
+      minItems: Math.max(0, Math.round(+f.minItems || 0)), minItemsWord: String(f.minItemsWord || '').trim().slice(0, 20), minEither: minAny(f),
       cutoffTime: /^\d{2}:\d{2}$/.test(f.cutoffTime || '') ? f.cutoffTime : '', daysNote: String(f.daysNote || '').trim().slice(0, 300),
       onlyDates: (f.onlyDates || []).filter(d => d >= t).sort(), blocked: f.blocked.filter(d => d >= t),
       pay: { mode: f.pay.mode, pct: +f.pay.pct || 50, bit: f.pay.bit || s.phone || '', bitLink: A.safeUrl(f.pay.bitLink), paybox: A.safeUrl(f.pay.paybox), hours: +f.pay.hours || 24 },
@@ -277,6 +280,7 @@
     const p = it.p, bits = [it.price > 0 ? `<b>${U.money(it.price)}</b>` : '<span class="bad">חסר מחיר</span>'];
     if (it.unit) bits.push(U.esc(it.unit));
     if ((p.options || []).length) bits.push(`${p.options.length} סוגים`);
+    if ((p.options || []).length && +p.pack > 1) bits.push(`מארז של ${p.pack}`);
     if (p.badge) bits.push(`תווית: ${U.esc(p.badge)}`);
     if (!it.image) bits.push('בלי תמונה');
     if (it.kind === 'c') bits.push('מוצר ידני');
@@ -354,7 +358,8 @@
           <label class="field"><span>משלוח חינם מעל (₪)</span><input type="number" min="0" data-p="delivery.freeAbove" data-num="1" value="${f.delivery.freeAbove}" ${dis}><small>0 = אין</small></label>
           <label class="field"><span>מינימום הזמנה (₪)</span><input type="number" min="0" data-p="minOrder" data-num="1" value="${f.minOrder}"></label>
           <label class="field"><span>מינימום יחידות בהזמנה</span><input type="number" min="0" max="500" data-p="minItems" data-num="1" value="${+f.minItems || 0}"><small>למשל 4 — הזמנה עם פחות לא תתקבל. 0 = בלי מינימום</small></label>
-          <label class="field"><span>איך לקרוא ליחידות</span>${inp('minItemsWord', f.minItemsWord, 'maxlength="20" placeholder="סופגניות"')}<small>מופיע ללקוחה: "מינימום ${+f.minItems || 4} ${U.esc(f.minItemsWord || 'סופגניות')}"</small></label>
+          <label class="field"><span>איך לקרוא ליחידות</span>${inp('minItemsWord', f.minItemsWord, 'maxlength="20" placeholder="סופגניות"')}<small>מופיע ללקוחה: "מינימום ${+f.minItems || 4} ${U.esc(f.minItemsWord || 'סופגניות')}${minAny(f) ? ' או ' + U.money(+f.minOrder) : ''}"</small></label>
+          ${+f.minItems > 1 && +f.minOrder > 0 ? `<div class="field full"><label class="row" style="gap:8px;min-height:40px"><input type="checkbox" data-p="minEither" ${f.minEither ? 'checked' : ''}> מספיק אחד מהשניים: ${+f.minItems} ${U.esc(f.minItemsWord || 'יחידות')} <b>או</b> הזמנה מעל ${U.money(+f.minOrder)}</label><small>${f.minEither ? 'הזמנה תתקבל אם יש בה לפחות ' + (+f.minItems) + ' ' + U.esc(f.minItemsWord || 'יחידות') + ', או אם הסכום הוא לפחות ' + U.money(+f.minOrder) + ' (למשל 2 סופגניות ב־₪16).' : 'כרגע צריך לעמוד בשני התנאים יחד.'}</small></div>` : ''}
           <label class="field full"><span>אזורי משלוח / הערה</span>${inp('delivery.note', f.delivery.note, `placeholder="למשל: משלוחים בתוך העיר בלבד" ${dis}`)}</label>
         </div></div>
       <div class="card"><div class="card-h"><h3>${A.icon('wallet')}תשלום לאישור ההזמנה</h3></div>
@@ -435,6 +440,7 @@
         <label class="field"><span>קטגוריה בתפריט</span><input name="cat" maxlength="30" list="fpCats" value="${e(p.cat || '')}" placeholder="${isR ? e(r.category || '') : 'למשל: סופגניות'}"><datalist id="fpCats">${cats.map(c => `<option value="${e(c)}">`).join('')}</datalist></label>
         <label class="field"><span>תווית מודגשת (לא חובה)</span><input name="badge" maxlength="18" value="${e(p.badge || '')}" placeholder="חדש · הכי נמכר · מהדורה מוגבלת"></label>
         <label class="field full"><span>טעמים / סוגים לבחירה (מופרדים בפסיק)</span><input name="options" value="${e((p.options || []).join(', '))}" placeholder="ריבה, שוקולד, פיסטוק"><small>אם מולא — הלקוחה בוחרת כמות לכל סוג בנפרד</small></label>
+        <label class="field"><span>מארז — כמה יחידות במארז</span><input name="pack" type="number" min="0" max="50" inputmode="numeric" value="${+p.pack > 1 ? p.pack : ''}" placeholder="בלי מארז"><small>למשל 6: הלקוחה בוחרת כמה מכל טעם עד שהמארז מלא, והמחיר הוא למארז שלם. עובד רק עם טעמים</small></label>
         <label class="field"><span>מקסימום בהזמנה אחת</span><input name="maxQty" type="number" min="1" max="999" inputmode="numeric" value="${p.maxQty || ''}" placeholder="20"></label>
         <label class="field"><span>שאלה ללקוחה על המוצר (לא חובה)</span><input name="note" maxlength="40" value="${e(p.note || '')}" placeholder="למשל: מה לכתוב על העוגה?"></label>
         ${isR ? '' : `<label class="field full"><span>אלרגנים (מופרדים בפסיק)</span><input name="allergens" value="${e((p.allergens || []).join(', '))}" placeholder="גלוטן, חלב, ביצים"></label>`}
@@ -457,7 +463,7 @@
           if (!isR && !name) { A.toast('חסר שם למוצר'); g('name').focus(); return; }
           if (!isR && !(price > 0)) { A.toast('חסר מחיר למוצר'); g('price').focus(); return; }
           const t = isR ? (f.products[it.id] = f.products[it.id] || {}) : (it ? it.p : { id: U.uid() });
-          Object.assign(t, { name, price, unit: v('unit'), desc: v('desc'), cat: v('cat'), badge: v('badge'), note: v('note'), options: splitList(v('options')),
+          Object.assign(t, { name, price, unit: v('unit'), desc: v('desc'), cat: v('cat'), badge: v('badge'), note: v('note'), options: splitList(v('options')), pack: Math.min(50, Math.max(0, Math.round(U.num(v('pack')) || 0))),
             maxQty: g('maxQty').value === '' ? '' : Math.min(999, Math.max(1, Math.round(U.num(g('maxQty').value)))), kosher: kz, on: g('on').checked });
           if (isR) { if (g('showImg')) t.showImg = g('showImg').checked; }
           else { t.image = image; t.allergens = splitList(v('allergens')); }
@@ -551,7 +557,7 @@
         setPath(el.dataset.p, v);
         if (el.dataset.p === 'open') { A.commit(v ? 'הטופס נפתח להזמנות' : 'הטופס נסגר להזמנות'); return; }
         saved();
-        if (el.type === 'checkbox' || el.tagName === 'SELECT' || ['cutoffTime', 'leadDays', 'minItems'].includes(el.dataset.p)) drawTab();
+        if (el.type === 'checkbox' || el.tagName === 'SELECT' || ['cutoffTime', 'leadDays', 'minItems', 'minOrder', 'minItemsWord'].includes(el.dataset.p)) drawTab();
       };
       main.onclick = async e => {
         if (e.target.matches('[data-selectall]')) { e.target.select(); return; }

@@ -73,7 +73,14 @@
   const count = () => lines().reduce((s, l) => s + l.q, 0);
   const minWord = () => String(cfg.minItemsWord || '').trim().slice(0, 20) || 'יחידות';
   const missing = n => { const left = +cfg.minItems - n; return left === 1 ? 'חסרה עוד אחת' : `חסרות עוד ${left}`; };
-  const subtotal = () => lines().reduce((s, l) => s + l.q * l.p.price, 0);
+  // מינימום "או": מספיק X יחידות או סכום של ₪Y (כששניהם מוגדרים והאפשרות מסומנת)
+  const minAny = () => !!cfg.minEither && +cfg.minItems > 1 && +cfg.minOrder > 0;
+  const minMet = () => minAny() && (count() >= +cfg.minItems || subtotal() >= +cfg.minOrder);
+  // מארז: מוצר עם טעמים שבו בוחרים כמה מכל טעם (למשל 3 תות + 3 דולצ'ה). הכמות ביחידות, המחיר למארז שלם
+  const packOf = p => p.options.length && +p.pack > 1 ? Math.round(+p.pack) : 0;
+  const unitP = p => packOf(p) ? p.price / packOf(p) : p.price;
+  const r2 = x => Math.round(x * 100) / 100;
+  const subtotal = () => r2(lines().reduce((s, l) => s + l.q * unitP(l.p), 0));
   const fee = () => st.method === 'delivery' && cfg.delivery.on ? (cfg.delivery.freeAbove > 0 && subtotal() >= cfg.delivery.freeAbove ? 0 : (+cfg.delivery.fee || 0)) : 0;
   // בדיקת קופון מיידית בדפדפן; השרת בודק שוב בשליחה וקובע את הסכום הסופי
   function coupon() {
@@ -122,7 +129,7 @@
     Object.entries(d.cart || {}).forEach(([k, q]) => {
       const i = k.indexOf('|'), p = prodOf(k.slice(0, i)), o = k.slice(i + 1);
       if (!p || (p.options.length ? !p.options.includes(o) : o !== '')) return;
-      q = Math.min(Math.floor(+q) || 0, maxOf(p)); if (q > 0) cart[k] = q;
+      q = Math.min(Math.floor(+q) || 0, maxOf(p) * (packOf(p) || 1)); if (q > 0) cart[k] = q;
     });
     Object.entries(d.notes || {}).forEach(([id, t]) => { if (prodOf(id) && t) notes[id] = String(t).slice(0, 300); });
     Object.entries(d.st || {}).forEach(([k, v]) => { if (k in st && typeof v === 'string' && v && !(k === 'coupon' && urlCoupon)) st[k] = v; });
@@ -168,7 +175,11 @@
   }
   function prodHtml(p) {
     const q = qtyOf(p), img = safeImg(p.img), badge = q ? `<span class="qb" aria-hidden="true">${q}</span>` : '';
-    const price = `<div class="price">${money(p.price)}${p.unit ? ` <span>· ${esc(p.unit)}</span>` : ''}</div>`;
+    const pk = packOf(p);
+    const price = `<div class="price">${money(p.price)}${pk ? ` <span>· מארז של ${pk}</span>` : p.unit ? ` <span>· ${esc(p.unit)}</span>` : ''}</div>`;
+    const packSt = !pk ? '' : !q ? `<div class="packst">בחרי ${pk} למארז — כמה שתרצי מכל טעם</div>`
+      : q % pk ? `<div class="packst warn">נבחרו ${q % pk} מתוך ${pk}${q >= pk ? ` במארז ה־${Math.floor(q / pk) + 1}` : ''} — ${pk - q % pk === 1 ? 'חסרה עוד אחת' : `חסרות עוד ${pk - q % pk}`}</div>`
+      : `<div class="packst ok">✓ ${q / pk === 1 ? 'מארז מלא' : `${q / pk} מארזים מלאים`} · ${money(q / pk * p.price)}</div>`;
     const noteHtml = !q ? '' : (p.note || noteOpen[p.id] || notes[p.id])
       ? `<label class="pnote"><span>${esc(p.note || 'הערה למוצר')}</span><input data-note maxlength="300" value="${esc(notes[p.id] || '')}" placeholder="${p.note ? '' : 'למשל: בלי אבקת סוכר'}"></label>`
       : '<button type="button" class="link sm" data-addnote>＋ הערה למוצר</button>';
@@ -178,7 +189,7 @@
         <div class="name">${esc(p.name)}${KZ[p.kosher] ? `<span class="kz ${p.kosher}">${KZ[p.kosher]}</span>` : ''}${p.badge ? `<span class="tag">${esc(p.badge)}</span>` : ''}</div>
         ${p.desc ? `<div class="desc" data-more>${esc(p.desc)}</div>` : ''}
         ${p.allergens && p.allergens.length ? `<div class="alg">מכיל: ${p.allergens.map(esc).join(', ')}</div>` : ''}
-        ${p.options.length ? `${price}<div class="optrows">${p.options.map(o => `<div class="optrow ${cart[key(p.id, o)] ? 'in' : ''}"><span>${esc(o)}</span>${stepper(p, o)}</div>`).join('')}</div>`
+        ${p.options.length ? `${price}<div class="optrows">${p.options.map(o => `<div class="optrow ${cart[key(p.id, o)] ? 'in' : ''}"><span>${esc(o)}</span>${stepper(p, o)}</div>`).join('')}</div>${packSt}`
           : `<div class="buy">${price}${stepper(p, '')}</div>`}
         ${noteHtml}
       </div></div>`;
@@ -220,8 +231,8 @@
       onlyDates().length ? '' : onDays.length === 7 ? 'כל יום' : onDays.length ? 'ימי ' + onDays.map(i => DAYS[i]).join(', ') : '',
       cutMin() !== null ? (+cfg.leadDays === 1 ? `הזמנה עד יום לפני, ${cfg.cutoffTime}` : +cfg.leadDays > 1 ? `הזמנה עד ${cfg.leadDays} ימים לפני, ${cfg.cutoffTime}` : `הזמנה עד ${cfg.cutoffTime} באותו יום`)
         : cfg.leadDays > 0 ? (cfg.leadDays === 1 ? 'להזמין יום מראש' : `להזמין ${cfg.leadDays} ימים מראש`) : '',
-      +cfg.minOrder ? `מינימום ${money(+cfg.minOrder)}` : '',
-      +cfg.minItems > 1 ? `מינימום ${+cfg.minItems} ${minWord()}` : '',
+      minAny() ? `מינימום ${+cfg.minItems} ${minWord()} או ${money(+cfg.minOrder)}` : +cfg.minOrder ? `מינימום ${money(+cfg.minOrder)}` : '',
+      !minAny() && +cfg.minItems > 1 ? `מינימום ${+cfg.minItems} ${minWord()}` : '',
       dl.on ? (+dl.freeAbove ? `משלוח חינם מעל ${money(+dl.freeAbove)}` : 'יש משלוחים') : 'איסוף עצמי'
     ].filter(Boolean);
     const fld = (id, k, label, extra) => `<label class="fld"><span>${label}</span><input id="${id}" data-f="${k}" value="${esc(st[k])}" ${extra || ''}><small class="ferr" id="e_${id}"></small></label>`;
@@ -285,7 +296,7 @@
     const cp = !(cfg.coupons && cfg.coupons.length) || st.coupon ? '' : cpOpen
       ? `<div class="cpform"><input id="f_cp" maxlength="30" placeholder="קוד הנחה" autocapitalize="characters" autocomplete="off" aria-label="קוד הנחה"><button type="button" class="btn soft sm" data-cpapply>החלה</button></div><small class="ferr" id="cpErr">${esc(cpErr)}</small>`
       : `<button type="button" class="link sm" data-cpopen>יש לך קוד הנחה?</button>${cpErr ? `<small class="ferr">${esc(cpErr)}</small>` : ''}`;
-    box.innerHTML = ls.length ? `${ls.map(l => `<div class="sl"><span>${lineName(l)}${notes[l.p.id] && firstOf(l) ? `<small>${esc(notes[l.p.id])}</small>` : ''}</span><span>${money(l.q * l.p.price)}</span></div>`).join('')}
+    box.innerHTML = ls.length ? `${ls.map(l => `<div class="sl"><span>${lineName(l)}${notes[l.p.id] && firstOf(l) ? `<small>${esc(notes[l.p.id])}</small>` : ''}</span><span>${money(r2(l.q * unitP(l.p)))}</span></div>`).join('')}
       ${st.date ? `<div class="sl"><span><i>${st.method === 'delivery' ? 'משלוח' : 'איסוף'}:</i> יום ${DAYS[parse(st.date).getDay()]} ${fmtD(st.date)}${st.time ? ' · ' + st.time : ''}</span><span></span></div>` : ''}
       ${totalsHtml()}${cp}` : `<p class="empty-sum">עוד לא בחרת מוצרים.</p>${st.coupon ? `<div class="sl cpn ok"><span>קוד הנחה <span class="cptag">${esc(st.coupon.trim().toUpperCase())}</span><button type="button" class="x" data-cpx aria-label="הסרת קוד ההנחה">✕</button><small>ההנחה תחושב כשתבחרי מוצרים</small></span><span></span></div>` : ''}${cp}`;
     if (hadFocus && $('#f_cp')) $('#f_cp').focus({ preventScroll: true });
@@ -296,8 +307,13 @@
   function nextStep() {
     const n = count();
     if (!n) return { label: 'בחירת מוצרים', go: '#s-menu' };
-    if (+cfg.minItems > 1 && n < +cfg.minItems) return { label: `${missing(n)} למינימום`, go: '#s-menu', msg: `ההזמנה המינימלית היא ${+cfg.minItems} ${minWord()} — ${missing(n)}` };
-    if (+cfg.minOrder && subtotal() < +cfg.minOrder) return { label: `עוד ${money(cfg.minOrder - subtotal())} למינימום`, go: '#s-menu', msg: `סכום ההזמנה המינימלי הוא ${money(+cfg.minOrder)}` };
+    // מארז שלא הושלם (למשל נבחרו 4 מתוך 6)
+    const openPack = cfg.products.find(p => packOf(p) && qtyOf(p) % packOf(p));
+    if (openPack) { const left = packOf(openPack) - qtyOf(openPack) % packOf(openPack), miss = left === 1 ? 'חסרה עוד אחת' : `חסרות עוד ${left}`;
+      return { label: `להשלמת המארז (${miss})`, go: `.prod[data-id="${CSS.escape(openPack.id)}"]`, msg: `ב${openPack.name} צריך ${packOf(openPack)} במארז — ${miss}` }; }
+    if (minAny() && !minMet()) return { label: `${missing(n)} למינימום`, go: '#s-menu', msg: `ההזמנה המינימלית היא ${+cfg.minItems} ${minWord()} או ${money(+cfg.minOrder)} — ${missing(n)}, או עוד ${money(cfg.minOrder - subtotal())}` };
+    if (!minAny() && +cfg.minItems > 1 && n < +cfg.minItems) return { label: `${missing(n)} למינימום`, go: '#s-menu', msg: `ההזמנה המינימלית היא ${+cfg.minItems} ${minWord()} — ${missing(n)}` };
+    if (!minAny() && +cfg.minOrder && subtotal() < +cfg.minOrder) return { label: `עוד ${money(cfg.minOrder - subtotal())} למינימום`, go: '#s-menu', msg: `סכום ההזמנה המינימלי הוא ${money(+cfg.minOrder)}` };
     if (!st.date) return { label: 'לבחירת תאריך', go: '#s-when', pulse: '#dates' };
     if (cfg.slotMinutes && slots(st.date).length && !st.time) return { label: 'לבחירת שעה', go: '#times', pulse: '#times' };
     if (st.method === 'delivery' && st.address.trim().length < 3) return { label: 'למילוי כתובת', focus: '#f_a' };
@@ -321,9 +337,10 @@
     if (!ls.length) { $('#cartDlg').close(); return; }
     const prog = (target, text, have = sub) => `<div class="prog">${text}<div><i style="width:${Math.min(100, Math.round(have / target * 100))}%"></i></div></div>`;
     const n = count(), mi = +cfg.minItems;
-    body.innerHTML = `${ls.map(l => `<div class="cl" data-id="${esc(l.p.id)}"><div class="cn"><b>${esc(l.p.name)}</b>${l.opt ? `<span>${esc(l.opt)}</span>` : ''}<small>${money(l.p.price)}</small></div>${stepper(l.p, l.opt)}<div class="cpr">${money(l.q * l.p.price)}</div></div>`).join('')}
-      ${mi > 1 && n < mi ? prog(mi, `${missing(n)} כדי להגיע למינימום של ${mi} ${minWord()}`, n) : ''}
-      ${+cfg.minOrder && sub < +cfg.minOrder ? prog(+cfg.minOrder, `עוד ${money(cfg.minOrder - sub)} להזמנה המינימלית (${money(+cfg.minOrder)})`) : ''}
+    body.innerHTML = `${ls.map(l => `<div class="cl" data-id="${esc(l.p.id)}"><div class="cn"><b>${esc(l.p.name)}</b>${l.opt ? `<span>${esc(l.opt)}</span>` : ''}<small>${packOf(l.p) ? money(l.p.price) + ' למארז של ' + packOf(l.p) : money(l.p.price)}</small></div>${stepper(l.p, l.opt)}<div class="cpr">${money(r2(l.q * unitP(l.p)))}</div></div>`).join('')}
+      ${minAny() ? (minMet() ? '' : prog(+cfg.minOrder, `להגעה למינימום: עוד ${money(cfg.minOrder - sub)}, או ${mi - n === 1 ? 'עוד אחת' : `עוד ${mi - n} ${minWord()}`}`, Math.max(sub, n / mi * cfg.minOrder)))
+        : mi > 1 && n < mi ? prog(mi, `${missing(n)} כדי להגיע למינימום של ${mi} ${minWord()}`, n) : ''}
+      ${!minAny() && +cfg.minOrder && sub < +cfg.minOrder ? prog(+cfg.minOrder, `עוד ${money(cfg.minOrder - sub)} להזמנה המינימלית (${money(+cfg.minOrder)})`) : ''}
       ${dl.on && st.method === 'delivery' && +dl.freeAbove && +dl.fee && sub < +dl.freeAbove ? prog(+dl.freeAbove, `עוד ${money(dl.freeAbove - sub)} למשלוח חינם`) : ''}
       ${totalsHtml()}`;
     $('#cartMsg').textContent = '';
@@ -332,8 +349,9 @@
   function toast(msg) { const el = $('#toast'); if (!el) return; el.textContent = msg; el.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove('show'), 2800); }
   const redraw = () => { drawSum(); drawBar(); drawGift(); if ($('#cartDlg') && $('#cartDlg').open) drawCart(); saveDraft(); };
   function setQty(id, o, d) {
-    const p = prodOf(id); if (!p) return; const k = key(id, o), max = maxOf(p), cur = cart[k] || 0;
-    if (d > 0 && cur >= max) return toast(`אפשר להזמין עד ${max} מ${p.name}`);
+    const p = prodOf(id); if (!p) return; const k = key(id, o), max = maxOf(p), cur = cart[k] || 0, pk = packOf(p);
+    if (d > 0 && pk && qtyOf(p) >= max * pk) return toast(`אפשר להזמין עד ${max} מארזים`);
+    if (d > 0 && !pk && cur >= max) return toast(`אפשר להזמין עד ${max} מ${p.name}`);
     const q = Math.max(cur + d, 0); if (q) cart[k] = q; else delete cart[k];
     if (!qtyOf(p)) { delete notes[id]; delete noteOpen[id]; }
   }
@@ -471,7 +489,7 @@
       <p class="note" id="doneSub">${needPay ? `הזמנה <b>#${esc(res.ref)}</b> · ${when}<br><b>1.</b> משלמים · <b>2.</b> לוחצים "שליחת ההזמנה"` : `מספר הזמנה <b>#${esc(res.ref)}</b> · ${when}`}</p>
       ${needPay ? '<div class="send-h" style="margin-top:14px"><span class="n">1</span>תשלום</div>' : ''}
       ${payHtml}
-      <div class="sum">${snap.ls.map(l => `<div><span>${lineName(l)}</span><span>${money(l.q * l.p.price)}</span></div>`).join('')}
+      <div class="sum">${snap.ls.map(l => `<div><span>${lineName(l)}</span><span>${money(r2(l.q * unitP(l.p)))}</span></div>`).join('')}
         ${snap.fee ? `<div><span>משלוח</span><span>${money(snap.fee)}</span></div>` : ''}${off > 0 ? `<div><span>קוד הנחה ${esc(order.couponCode)}</span><span style="color:var(--ok)">−${money(off)}</span></div>` : ''}<div><span>סה״כ</span><span>${money(sum)}</span></div></div>
       <div id="pickupAddr"></div>
       ${!needPay && cfg.payInfo ? `<p class="note">💳 ${esc(cfg.payInfo)}</p>` : ''}

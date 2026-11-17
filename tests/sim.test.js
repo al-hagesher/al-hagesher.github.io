@@ -2,7 +2,7 @@
 const fs = require('fs'), path = require('path'), vm = require('vm'), assert = require('assert');
 const ctx = { console, Intl, TextEncoder, TextDecoder, btoa: s => Buffer.from(s, 'binary').toString('base64'), atob: s => Buffer.from(s, 'base64').toString('binary') };
 ctx.window = ctx; vm.createContext(ctx);
-['js/core.js', 'js/seed.js', 'js/library.js', 'js/sync.js', 'js/pages/production.js', 'tests/demo-fixture.js', 'js/video-plan.js', 'js/video-analyze.js', 'js/video-voice.js', 'js/music.js', 'js/receipts.js', 'js/pages/feedback.js', 'js/pages/video.js'].forEach(f => vm.runInContext(fs.readFileSync(path.join(__dirname, '..', f), 'utf8'), ctx, { filename: f }));
+['js/core.js', 'js/seed.js', 'js/library.js', 'js/sync.js', 'js/pages/production.js', 'tests/demo-fixture.js', 'js/video-plan.js', 'js/video-analyze.js', 'js/video-voice.js', 'js/music.js', 'js/receipts.js', 'js/pages/feedback.js', 'js/pages/video.js', 'js/pages/assistant.js'].forEach(f => vm.runInContext(fs.readFileSync(path.join(__dirname, '..', f), 'utf8'), ctx, { filename: f }));
 const A = ctx.App, U = A.util, C = A.calc;
 let n = 0; const t = (name, fn) => { fn(); n++; console.log('✓', name); };
 const near = (a, b, eps = 0.01, msg) => assert.ok(Math.abs(a - b) <= eps, `${msg || ''} expected ${b}, got ${a}`);
@@ -602,5 +602,38 @@ t('פרסומת: מסך הזמנה ארוך לסריקה, ותאריך אחרו�
   // תאריכים מסוימים בלבד, וטופס כבוי
   assert.ok(/ראשון/.test(A.adDeadline(Object.assign({}, f, { onlyDates: ['2026-11-22'] }), '2026-11-16', '10:00')));
   assert.strictEqual(A.adDeadline(Object.assign({}, f, { enabled: false }), '2026-11-16', '10:00'), '');
+});
+
+t('עוזרת AI: שיחה שבורה מתוקנת, וכל כלי הקריאה עובדים', () => {
+  const AS = A.pages.assistant, clean = AS.cleanHistory;
+  const tu = id => ({ type: 'tool_use', id, name: 'list_orders', input: {} }), tr = id => ({ type: 'tool_result', tool_use_id: id, content: '[]' });
+  // שיחה שנגזרה באמצע: מתחילה בתוצאת כלי, עם תמונה ישנה, ומסתיימת בבקשת כלי בלי תוצאה
+  const broken = [
+    { role: 'user', content: [tr('x0')] },
+    { role: 'assistant', content: [{ type: 'text', text: 'הנה' }] },
+    { role: 'user', content: [{ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: 'AAAA' } }, { type: 'text', text: 'קבלה' }] },
+    { role: 'assistant', content: [{ type: 'text', text: 'בודקת' }, tu('a1')] },
+    { role: 'user', content: [tr('a1')] },
+    { role: 'assistant', content: [{ type: 'text', text: 'סיימתי' }] },
+    { role: 'user', content: 'מה יש לי השבוע?' },
+    { role: 'assistant', content: [tu('a2')] }
+  ];
+  const c = clean(broken);
+  assert.strictEqual(c[0].role, 'user'); assert.ok(!c[0].content.some(b => b.type === 'tool_result'), 'מתחילה בשאלה אמיתית');
+  assert.ok(!JSON.stringify(c).includes('"image"'), 'תמונות ישנות הוחלפו');
+  assert.ok(c.some(m => m.content.some(b => b.type === 'tool_use' && b.id === 'a1')), 'זוג כלי שלם נשמר');
+  assert.ok(!JSON.stringify(c).includes('a2'), 'בקשת כלי בלי תוצאה הוסרה');
+  c.forEach((m, i) => { if (i) assert.notStrictEqual(m.role === c[i - 1].role && m.role === 'assistant', true, 'אין שתי תשובות רצופות'); });
+  // קיצור שיחה ארוכה — רק בגבול בטוח
+  const long = []; for (let i = 0; i < 40; i++) long.push({ role: 'user', content: 'ש' + i }, { role: 'assistant', content: [tu('t' + i)] }, { role: 'user', content: [tr('t' + i)] }, { role: 'assistant', content: [{ type: 'text', text: 'ת' + i }] });
+  const s = clean(long, 30); assert.ok(s.length <= 30 && s[0].role === 'user' && typeof s[0].content[0].text === 'string' && s[0].content[0].type === 'text');
+  // כלי הקריאה רצים על נתוני הדוגמה ומחזירים JSON תקין
+  const save = A.state; const st = A.normalize(null); A.seed.demo(st); A.state = st;
+  ['business_stats', 'list_customers', 'list_ingredients', 'feedback_summary', 'order_form_info', 'shopping_list', 'today_summary', 'list_orders', 'recipes_by_profit', 'low_stock']
+    .forEach(name => { const out = JSON.parse(AS.TOOLS[name].execute({})); assert.ok(out && typeof out === 'object', name); });
+  const bs = JSON.parse(AS.TOOLS.business_stats.execute({ from_month: '2020-01', to_month: '2030-12' }));
+  assert.ok(bs.orders >= 1 && bs.revenue > 0 && Array.isArray(bs.topProducts));
+  assert.ok(JSON.parse(AS.TOOLS.list_customers.execute({ sort: 'inactive' })).count >= 1);
+  A.state = save;
 });
 console.log(`\n${n} בדיקות עברו`);
